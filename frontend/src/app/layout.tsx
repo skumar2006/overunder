@@ -19,7 +19,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${inter.className} bg-gray-900 min-h-screen`}>
         <Web3Provider>
-          {children}
+        {children}
         </Web3Provider>
       </body>
     </html>

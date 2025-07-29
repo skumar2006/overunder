@@ -12,7 +12,7 @@ export const config = getDefaultConfig({
 export const CONTRACTS = {
   TREASURY: '0xd12Ac2BFEE8a2f1C83185B0210F6E8984c3b04C4' as const,
   OVERUNDER: '0xa3B126bcD467Af8c159FcA0f3c0667912Dc47f6B' as const,
-  MARKET_FACTORY: '0x9d6a9f93dE1ae025eb8CB8A2a6E2c99e13C93c7e' as const,
+  MARKET_FACTORY: '0x9d6a9f93dE1ae025eb8CB8A2a6E2c99e13C93c7e' as const, // Original working factory
 };
 
 // OverUnder Contract ABI (from compiled artifacts)

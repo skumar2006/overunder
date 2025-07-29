@@ -2,7 +2,7 @@ import { ethers, upgrades } from "hardhat";
 import fs from "fs";
 
 async function main() {
-  console.log("🚀 Deploying upgradeable OverUnder betting platform...\n");
+  console.log("🚀 Deploying upgradeable OverUnder betting platform V2...\n");
 
   const [deployer] = await ethers.getSigners();
   console.log("Deploying with account:", deployer.address);
@@ -18,7 +18,7 @@ async function main() {
   console.log("   Treasury owner:", await treasury.owner(), "\n");
 
   // 2. Deploy upgradeable OverUnder contract using UUPS proxy
-  console.log("📋 2. Deploying OverUnder (Upgradeable) with UUPS proxy...");
+  console.log("📋 2. Deploying OverUnder V2 (Upgradeable) with UUPS proxy...");
   const OverunderUpgradeable = await ethers.getContractFactory("OverunderUpgradeable");
   
   const overunder = await upgrades.deployProxy(
@@ -35,45 +35,14 @@ async function main() {
   const implementationAddress = await upgrades.erc1967.getImplementationAddress(proxyAddress);
   const adminAddress = await upgrades.erc1967.getAdminAddress(proxyAddress);
   
-  console.log("✅ OverUnder Proxy deployed to:", proxyAddress);
+  console.log("✅ OverUnder V2 Proxy deployed to:", proxyAddress);
   console.log("   Implementation address:", implementationAddress);
   console.log("   Admin address:", adminAddress);
   console.log("   Owner:", await overunder.owner());
   console.log("   Version:", await overunder.getVersion(), "\n");
 
-  // 3. Deploy MarketFactory separately
-  console.log("📋 3. Deploying MarketFactory (Upgradeable)...");
-  const MarketFactoryUpgradeable = await ethers.getContractFactory("MarketFactoryUpgradeable");
-  const marketFactory = await upgrades.deployProxy(
-    MarketFactoryUpgradeable,
-    [proxyAddress, treasuryAddress],
-    {
-      initializer: 'initialize',
-      kind: 'uups'
-    }
-  );
-  await marketFactory.waitForDeployment();
-  
-  const marketFactoryAddress = await marketFactory.getAddress();
-  const marketFactoryImplementation = await upgrades.erc1967.getImplementationAddress(marketFactoryAddress);
-  
-  console.log("✅ MarketFactory Proxy deployed to:", marketFactoryAddress);
-  console.log("   MarketFactory Implementation:", marketFactoryImplementation);
-  console.log("   MarketFactory owner:", await marketFactory.owner());
-  
-  // 4. Connect OverUnder with MarketFactory
-  console.log("📋 4. Connecting OverUnder with MarketFactory...");
-  await overunder.setMarketFactory(marketFactoryAddress);
-  console.log("✅ Contracts connected successfully!");
-  
-  const [totalMarkets, totalCategories, filterEnabled, defaultFee] = await marketFactory.getMarketStats();
-  console.log("   Total markets:", totalMarkets.toString());
-  console.log("   Total categories:", totalCategories.toString());
-  console.log("   Category filter enabled:", filterEnabled);
-  console.log("   Default creation fee:", ethers.formatEther(defaultFee), "ETH\n");
-
-  // 5. Test basic functionality
-  console.log("📋 5. Testing basic functionality...");
+  // 3. Test basic functionality
+  console.log("📋 3. Testing basic functionality...");
   
   // Test profile update
   await overunder.updateProfile("TestDeployer");
@@ -81,15 +50,47 @@ async function main() {
   console.log("✅ Profile updated. Username:", profile.username);
   
   // Test contract status
-  const [version, paused, totalMarketsCount, minDuration, maxDuration] = await overunder.getContractStatus();
+  const [version, paused, totalBets, minDuration, maxDuration, feeRate] = await overunder.getContractStatus();
   console.log("✅ Contract status:");
   console.log("   Version:", version.toString());
   console.log("   Paused:", paused);
-  console.log("   Total markets:", totalMarketsCount.toString());
+  console.log("   Total bets:", totalBets.toString());
   console.log("   Min duration:", (Number(minDuration) / 3600).toString(), "hours");
-  console.log("   Max duration:", (Number(maxDuration) / (3600 * 24)).toString(), "days\n");
+  console.log("   Max duration:", (Number(maxDuration) / (3600 * 24)).toString(), "days");
+  console.log("   Platform fee:", (Number(feeRate) / 100).toString(), "%\n");
 
-  // 6. Save deployment info to file
+  // 4. Test bet creation with balanced liquidity
+  console.log("📋 4. Testing bet creation...");
+  const betOptions = ["YES", "NO"];
+  const deadline = Math.floor(Date.now() / 1000) + (24 * 60 * 60); // 24 hours from now
+  
+  const tx = await overunder.createBet(
+    "Will it rain tomorrow?",
+    "Weather prediction for testing",
+    betOptions,
+    deadline,
+    "Weather",
+    { value: ethers.parseEther("0.01") } // 0.01 ETH
+  );
+  
+  const receipt = await tx.wait();
+  console.log("✅ Test bet created in transaction:", receipt?.hash);
+  
+  // Get the bet details
+  const bet = await overunder.getBet(1);
+  console.log("   Bet ID:", bet.betId.toString());
+  console.log("   Question:", bet.question);
+  console.log("   Options:", bet.bettingOptions);
+  console.log("   Total pool:", ethers.formatEther(bet.totalPoolAmount), "ETH");
+  
+  // Check balanced odds
+  const odds = await overunder.getBetOdds(1);
+  console.log("   Initial odds:");
+  for (let i = 0; i < odds.length; i++) {
+    console.log(`     ${bet.bettingOptions[i]}: ${odds[i].toString()} basis points (${(Number(odds[i]) / 100).toFixed(1)}%)`);
+  }
+
+  // 5. Save deployment info to file
   const deploymentInfo = {
     network: "localhost", // Change this based on your network
     deployedAt: new Date().toISOString(),
@@ -105,21 +106,53 @@ async function main() {
         admin: adminAddress,
         name: "OverunderUpgradeable",
         version: version.toString()
-      },
-      marketFactory: {
-        proxy: marketFactoryAddress,
-        implementation: marketFactoryImplementation,
-        name: "MarketFactoryUpgradeable"
       }
+    },
+    contractABI: {
+      // This will be used by the frontend
+      proxyAddress: proxyAddress,
+      treasuryAddress: treasuryAddress
     }
   };
 
   fs.writeFileSync("deployments.json", JSON.stringify(deploymentInfo, null, 2));
-  console.log("📄 Deployment info saved to deployments.json\n");
+  console.log("\n📄 Deployment info saved to deployments.json");
+
+  // 6. Generate ABI files for frontend
+  console.log("📋 5. Generating ABI files for frontend...");
+  
+  const overunderArtifact = await ethers.getContractFactory("OverunderUpgradeable");
+  const treasuryArtifact = await ethers.getContractFactory("Treasury");
+  
+  const abiDir = "abis";
+  if (!fs.existsSync(abiDir)) {
+    fs.mkdirSync(abiDir);
+  }
+  
+  fs.writeFileSync(
+    `${abiDir}/OverunderUpgradeable.json`,
+    JSON.stringify({
+      contractName: "OverunderUpgradeable",
+      abi: overunderArtifact.interface.formatJson(),
+      address: proxyAddress
+    }, null, 2)
+  );
+  
+  fs.writeFileSync(
+    `${abiDir}/Treasury.json`,
+    JSON.stringify({
+      contractName: "Treasury",
+      abi: treasuryArtifact.interface.formatJson(),
+      address: treasuryAddress
+    }, null, 2)
+  );
+  
+  console.log("✅ ABI files generated in ./abis/ directory\n");
 
   console.log("🎉 Deployment completed successfully!");
   console.log("🔧 To upgrade later, use: npx hardhat run scripts/upgrade.ts");
   console.log("💡 Proxy address for frontend:", proxyAddress);
+  console.log("💰 Treasury address:", treasuryAddress);
 }
 
 main()

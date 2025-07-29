@@ -141,8 +141,8 @@ export default function Home() {
                 <p>Chain ID: 84532</p>
                 <a 
                   href="https://sepolia.basescan.org/"
-                  target="_blank"
-                  rel="noopener noreferrer"
+          target="_blank"
+          rel="noopener noreferrer"
                   className="text-blue-400 hover:text-blue-300 block"
                 >
                   Block Explorer →
