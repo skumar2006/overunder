@@ -23,7 +23,17 @@ contract Treasury {
         owner = msg.sender;
     }
     
+    mapping(address => bool) public authorizedSources;
+    
+    event AuthorizationChanged(address indexed source, bool authorized);
+    
+    function setAuthorization(address _source, bool _authorized) external onlyOwner {
+        authorizedSources[_source] = _authorized;
+        emit AuthorizationChanged(_source, _authorized);
+    }
+    
     function collectFee() external payable {
+        require(authorizedSources[msg.sender], "Unauthorized");
         require(msg.value > 0, "No fee to collect");
         totalFeesCollected += msg.value;
         feesFromSource[msg.sender] += msg.value;
