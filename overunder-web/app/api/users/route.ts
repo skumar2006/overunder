@@ -14,11 +14,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields: id, email' }, { status: 400 });
     }
 
-    // First, try to get existing user
+    // First, try to get existing user by privy_user_id
     const { data: existingUser } = await supabaseAdmin
       .from('users')
       .select('*')
-      .eq('id', id)
+      .eq('privy_user_id', id)
       .single();
 
     let user = existingUser;
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       const { data: newUser, error: userError } = await supabaseAdmin
         .from('users')
         .insert({
-          id,
+          privy_user_id: id,
           email,
           username: username || email.split('@')[0],
           wallet_address,
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
           const { data: raceUser } = await supabaseAdmin
             .from('users')
             .select('*')
-            .eq('id', id)
+            .eq('privy_user_id', id)
             .single();
           user = raceUser;
         } else {
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
         const { data: updatedUser } = await supabaseAdmin
           .from('users')
           .update({ wallet_address })
-          .eq('id', id)
+          .eq('privy_user_id', id)
           .select()
           .single();
         user = updatedUser || existingUser;
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
       const { error: balanceError } = await supabaseAdmin
         .from('wallet_balances')
         .insert({
-          user_id: id,
+          user_id: user.id, // Use the generated UUID, not the Privy ID
           balance: 1000.00, // $1000 starting balance
         });
 

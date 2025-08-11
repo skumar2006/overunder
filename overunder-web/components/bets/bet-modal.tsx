@@ -39,25 +39,25 @@ export function BetModal({ bet, side, onClose }: BetModalProps) {
   const potentialPayout = amount * (100 / currentOdds);
   
   // Check if betting is still allowed
-  const isActive = bet.status === 'active';
+  const isActive = !bet.isResolved && bet.timeRemaining > 0;
   const canBet = user && isActive && amount > 0 && amount <= ethBalanceFormatted;
 
   // Comprehensive debugging
   console.log('🔍 BetModal Debug:', {
     bet: {
       betId: bet.betId,
-      id: bet.id,
       question: bet.question,
       isResolved: bet.isResolved,
       timeRemaining: bet.timeRemaining,
-      bettingOptions: bet.bettingOptions,
+      options: bet.options,
       odds: bet.odds
     },
     amount,
     isActive,
     canBet,
     side,
-    optionIndex
+    optionIndex,
+    ethBalance: ethBalanceFormatted
   });
 
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -67,11 +67,11 @@ export function BetModal({ bet, side, onClose }: BetModalProps) {
   const handlePlaceBet = async () => {
     console.log('🎯 Placing custodial bet:', {
       user: user?.username,
-      balance,
+      ethBalance: ethBalanceFormatted,
       amount,
       bet: {
-        id: bet.id,
-        status: bet.status
+        betId: bet.betId,
+        isResolved: bet.isResolved
       }
     });
 
@@ -85,7 +85,7 @@ export function BetModal({ bet, side, onClose }: BetModalProps) {
       return;
     }
 
-    if (bet.status !== 'active') {
+    if (bet.isResolved) {
       toast('Betting is closed', 'error');
       return;
     }
@@ -95,13 +95,13 @@ export function BetModal({ bet, side, onClose }: BetModalProps) {
       return;
     }
 
-    if (amount > balance) {
-      toast('Insufficient balance', 'error');
+    if (amount > ethBalanceFormatted) {
+      toast('Insufficient ETH balance', 'error');
       return;
     }
 
-    if (amount < 1) {
-      toast('Minimum bet amount is $1', 'error');
+    if (amount < 0.001) {
+      toast('Minimum bet amount is 0.001 ETH', 'error');
       return;
     }
 
@@ -161,7 +161,7 @@ export function BetModal({ bet, side, onClose }: BetModalProps) {
               <div>Amount: {amount}</div>
               <div>Can Bet: {canBet ? 'Yes' : 'No'}</div>
               <div>Bet ID: {bet.betId}</div>
-              <div>Options: {bet.bettingOptions?.join(', ')}</div>
+              <div>Options: {bet.options?.join(', ')}</div>
             </div>
           )}
 
@@ -202,7 +202,7 @@ export function BetModal({ bet, side, onClose }: BetModalProps) {
 
           {/* Option Buttons */}
           <div className="grid grid-cols-2 gap-3 mb-6">
-            {bet.bettingOptions.map((option, index) => (
+            {(bet.options || ['Yes', 'No']).map((option: string, index: number) => (
               <button
                 key={index}
                 className={`p-4 rounded-xl border-2 transition-all ${

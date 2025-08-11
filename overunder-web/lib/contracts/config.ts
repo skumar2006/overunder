@@ -25,10 +25,10 @@ export const NETWORKS = {
 
 // Contract addresses by network
 export const CONTRACT_ADDRESSES: Record<number, ContractConfig> = {
-  // Localhost (updated with your actual deployed addresses)
+  // Localhost (updated with deployed addresses from terminal output)
   31337: {
-    overunderAddress: '0x5FC8d32690cc91D4c39d9d3abcBD16989F875707' as Address, // Your deployed proxy
-    treasuryAddress: '0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9' as Address, // Your deployed treasury
+    overunderAddress: '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0' as Address, // OverUnder V2 Proxy
+    treasuryAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3' as Address, // Treasury
     chainId: 31337,
   },
   // Base Sepolia (testnet) - DEPLOYED!
@@ -61,11 +61,11 @@ export function getContractConfig(chainId?: number): ContractConfig {
 export const CONTRACT_SETTINGS = {
   // Gas limits for different operations
   gasLimits: {
-    createBet: 500000n,
-    placeWager: 200000n,
-    resolveBet: 150000n,
-    claimWinnings: 200000n,
-    updateProfile: 100000n,
+    createBet: BigInt(500000),
+    placeWager: BigInt(200000),
+    resolveBet: BigInt(150000),
+    claimWinnings: BigInt(200000),
+    updateProfile: BigInt(100000),
   },
   
   // Minimum values
