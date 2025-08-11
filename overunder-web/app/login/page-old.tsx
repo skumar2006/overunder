@@ -52,13 +52,13 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-8">
-      <div className="max-w-sm md:max-w-md w-full">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+      <div className="max-w-md w-full">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
           {/* Logo */}
-          <div className="text-center mb-6 md:mb-8">
-            <h1 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">OverUnder</h1>
-            <p className="text-sm md:text-base text-gray-600">
+          <div className="text-center mb-8">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">OverUnder</h1>
+            <p className="text-gray-600">
               Sign in to create and bet on prediction markets
             </p>
           </div>
@@ -88,7 +88,7 @@ export default function LoginPage() {
                   await invoke();
                 }
               }}
-              className="w-full bg-blue-600 text-white py-2.5 md:py-3 px-4 rounded-xl text-sm md:text-base font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 transition-colors flex items-center justify-center space-x-2"
+              className="w-full bg-blue-600 text-white py-3 px-4 rounded-xl font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 transition-colors flex items-center justify-center space-x-2"
             >
               <Mail className="w-5 h-5" />
               <span>Continue with Email</span>

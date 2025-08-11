@@ -290,29 +290,19 @@ export default function CreateBetPage() {
       );
 
       console.log('💾 Storing bet in Supabase:', betData);
-      console.log('🔍 User object:', user);
-      console.log('🔍 Supabase client:', !!supabase);
 
-      // Use server API for bet creation (more reliable than direct client insert)
-      console.log('📡 Calling server API to store bet...');
-      const response = await fetch('/api/bets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(betData),
-      });
+      const { data: supabaseBet, error } = await supabase
+        .from('bets')
+        .insert(betData)
+        .select()
+        .single();
 
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
-        console.error('❌ Server API error:', {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorBody
-        });
-        throw new Error(`Server error: ${errorBody?.error?.message || errorBody?.error || response.statusText}`);
+      if (error) {
+        console.error('Supabase error:', error);
+        throw new Error(`Database error: ${error.message}`);
       }
 
-      const { data: supabaseBet } = await response.json();
-      console.log('✅ Bet stored successfully via server API:', supabaseBet);
+      console.log('✅ Bet stored successfully:', supabaseBet);
       
       toast('Bet created successfully! Redirecting...', 'success');
       
@@ -348,16 +338,16 @@ export default function CreateBetPage() {
       <div className="min-h-screen bg-gray-50">
         <Navbar />
       
-      <main className="max-w-2xl md:max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="mb-6 md:mb-8">
-          <h1 className="text-2xl md:text-4xl font-bold text-gray-900 mb-2">Create New Bet</h1>
-          <p className="text-sm md:text-base text-gray-600">Set up a prediction market and let people bet on the outcome</p>
-          <div className="mt-2 text-xs md:text-sm text-blue-600">Powered by Privy - Wallet connected</div>
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">Create New Bet</h1>
+          <p className="text-gray-600">Set up a prediction market and let people bet on the outcome</p>
+          <div className="mt-2 text-sm text-blue-600">Powered by Privy - Wallet connected</div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
-          <form onSubmit={handleSubmit} className="space-y-6 md:space-y-8">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+          <form onSubmit={handleSubmit} className="space-y-8">
             {/* Bet Question */}
             <div className="space-y-2">
               <Label htmlFor="question" className="text-base font-semibold text-gray-900">

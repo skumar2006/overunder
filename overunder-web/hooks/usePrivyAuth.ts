@@ -67,8 +67,8 @@ export function usePrivyAuth() {
         
         // If the id is a DID format, look for the actual UUID in other fields
         if (userId.startsWith('did:privy:')) {
-          // Try to get the UUID from other fields or extract from DID
-          userId = privyUser.userId || privyUser.sub || userId.replace('did:privy:', '');
+                  // Try to get the UUID from other fields or extract from DID
+        userId = privyUser.userId || privyUser.sub || privyUser.id.replace('did:privy:', '');
         }
         
         console.log('🔍 Privy User Debug:', {
@@ -192,20 +192,14 @@ export function usePrivyAuth() {
           }
         }
 
-        // Get user balance
-        const { data: balanceData } = await supabase
-          .from('wallet_balances')
-          .select('balance')
-          .eq('user_id', userId)
-          .single();
-
+        // No longer using custodial balance - using real on-chain ETH
         setUser({
           id: userId,
           email: existingUser?.email || email,
           username: existingUser?.username || email?.split('@')[0],
           wallet_address: walletAddress,
         });
-        setBalance(balanceData?.balance || 0);
+        setBalance(0); // Not used anymore - real ETH balance is shown in navbar
 
       } catch (error) {
         console.error('Error initializing user:', error);

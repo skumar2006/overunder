@@ -67,6 +67,12 @@ export {
   useDisputeConstants,
 } from './disputeHooks';
 
+// Real Betting Hooks
+export {
+  useRealBetting,
+  useProvideLiquidity,
+} from './realBettingHooks';
+
 // React Hooks - Custodial System (wagmi-based hooks temporarily disabled)
 // TODO: Implement custodial versions of these hooks
 // export {

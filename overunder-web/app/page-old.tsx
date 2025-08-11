@@ -96,59 +96,67 @@ export default function HomePage() {
     <div className="min-h-screen bg-gray-50">
         <Navbar />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
-        {/* Header - Responsive */}
-        <div className="mb-6 md:mb-8">
-          <h1 className="text-2xl md:text-4xl font-bold text-gray-900 mb-2">Prediction Markets</h1>
-          <p className="text-sm md:text-base text-gray-600">Bet on future events with your community</p>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">Prediction Markets</h1>
+          <p className="text-gray-600">Bet on future events with your community</p>
           
-
+          {/* Development Notice */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
+              <strong>✅ Base Sepolia Connected:</strong> Blockchain is connected successfully!
+              {betIds && betIds.length > 0
+                ? ` Showing ${betIds.length} on-chain bets.`
+                : ' No bets created yet. Create your first bet!'}
+            </div>
+          )}
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
-          <div className="bg-white rounded-xl p-4 md:p-6 border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-white rounded-xl p-6 border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-semibold text-gray-900 text-sm md:text-base">Total Bets</h3>
-                <p className="text-xl md:text-2xl font-bold text-blue-600">{betIds?.length || 0}</p>
+                <h3 className="font-semibold text-gray-900">Total Bets</h3>
+                <p className="text-2xl font-bold text-blue-600">{betIds?.length || 0}</p>
               </div>
-              <TrendingUp className="h-6 w-6 md:h-8 md:w-8 text-blue-600 flex-shrink-0" />
+              <TrendingUp className="h-8 w-8 text-blue-600" />
             </div>
           </div>
 
-          <div className="bg-white rounded-xl p-4 md:p-6 border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+          <div className="bg-white rounded-xl p-6 border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-semibold text-gray-900 text-sm md:text-base">Active Markets</h3>
-                <p className="text-xl md:text-2xl font-bold text-green-600">
+                <h3 className="font-semibold text-gray-900">Active Markets</h3>
+                <p className="text-2xl font-bold text-green-600">
                   {betIds?.length || 0}
                 </p>
               </div>
-              <Clock className="h-6 w-6 md:h-8 md:w-8 text-green-600 flex-shrink-0" />
+              <Clock className="h-8 w-8 text-green-600" />
             </div>
           </div>
 
-          <div className="bg-white rounded-xl p-4 md:p-6 border border-gray-200 shadow-sm hover:shadow-md transition-shadow sm:col-span-2 lg:col-span-1">
+          <div className="bg-white rounded-xl p-6 border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-semibold text-gray-900 text-sm md:text-base">Your Account</h3>
-                <p className="text-xs md:text-sm text-gray-600">
+                <h3 className="font-semibold text-gray-900">Your Account</h3>
+                <p className="text-sm text-gray-600">
                   {user ? user.username : 'Not signed in'}
                 </p>
               </div>
-              <Users className="h-6 w-6 md:h-8 md:w-8 text-purple-600 flex-shrink-0" />
+              <Users className="h-8 w-8 text-purple-600" />
             </div>
           </div>
         </div>
 
-        {/* Tab Navigation - Responsive */}
-        <div className="bg-white rounded-xl border border-gray-200 mb-6 shadow-sm">
+        {/* Tab Navigation */}
+        <div className="bg-white rounded-xl border border-gray-200 mb-6">
           <div className="border-b border-gray-200">
-            <nav className="flex space-x-4 md:space-x-8 px-4 md:px-6 overflow-x-auto">
+            <nav className="flex space-x-8 px-6">
               <button
                 onClick={() => setSelectedTab('live-bets')}
-                className={`py-3 md:py-4 border-b-2 font-medium text-sm whitespace-nowrap ${
+                className={`py-4 border-b-2 font-medium text-sm ${
                   selectedTab === 'live-bets'
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -158,7 +166,7 @@ export default function HomePage() {
               </button>
               <button
                 onClick={() => setSelectedTab('trending')}
-                className={`py-3 md:py-4 border-b-2 font-medium text-sm whitespace-nowrap ${
+                className={`py-4 border-b-2 font-medium text-sm ${
                   selectedTab === 'trending'
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -168,7 +176,7 @@ export default function HomePage() {
               </button>
               <button
                 onClick={() => setSelectedTab('resolved')}
-                className={`py-3 md:py-4 border-b-2 font-medium text-sm whitespace-nowrap ${
+                className={`py-4 border-b-2 font-medium text-sm ${
                   selectedTab === 'resolved'
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -180,7 +188,7 @@ export default function HomePage() {
           </div>
 
           {/* Tab Content */}
-          <div className="p-4 md:p-6">
+          <div className="p-6">
             {betIds && betIds.length > 0 ? (
               <BetList betIds={betIds} selectedTab={selectedTab} onBetClick={openBetModal} />
             ) : (
@@ -189,13 +197,12 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Create Bet Button - Mobile FAB */}
+        {/* Create Bet Button */}
         {isConnected && (
-          <div className="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-30">
+          <div className="fixed bottom-6 right-6">
             <Link href="/bets/new">
-              <button className="bg-blue-600 hover:bg-blue-700 text-white rounded-full p-3 md:p-4 shadow-lg transition-all duration-200 hover:scale-105 active:scale-95">
-                <Plus className="h-5 w-5 md:h-6 md:w-6" />
-                <span className="sr-only">Create new bet</span>
+              <button className="bg-blue-600 hover:bg-blue-700 text-white rounded-full p-4 shadow-lg transition-all duration-200 hover:scale-105">
+                <Plus className="h-6 w-6" />
               </button>
             </Link>
           </div>
@@ -223,14 +230,14 @@ function BetList({
   onBetClick: (bet: BetData, side: 'yes' | 'no') => void
 }) {
   return (
-    <div className="space-y-4 md:space-y-6">
+    <div className="space-y-4">
       {betIds.slice(0, 10).map((betId) => (
         <BetItem key={betId} betId={betId} onBetClick={onBetClick} />
       ))}
 
       {betIds.length > 10 && (
         <div className="text-center py-4">
-          <p className="text-gray-500 text-sm md:text-base">Showing first 10 bets. Load more coming soon...</p>
+          <p className="text-gray-500">Showing first 10 bets. Load more coming soon...</p>
         </div>
       )}
     </div>
@@ -282,27 +289,42 @@ function BetItem({
   const timeRemaining = formatTimeRemaining(bet.deadline);
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 md:p-6 hover:shadow-md transition-shadow w-full">
-      <div className="space-y-4">
-        <div>
-          <h3 className="font-semibold text-gray-900 mb-2 text-base md:text-lg leading-tight">{bet.question}</h3>
+    <div className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+      <div className="flex justify-between items-start mb-4">
+        <div className="flex-1">
+          <h3 className="font-semibold text-gray-900 mb-2">{bet.question}</h3>
           {bet.description && (
             <p className="text-gray-600 text-sm mb-3">{bet.description}</p>
           )}
+
+          <div className="flex items-center space-x-4 text-sm text-gray-500">
+            <span className="flex items-center">
+              <Clock className="h-4 w-4 mr-1" />
+              {status === 'active' ? timeRemaining : status === 'resolved' ? 'Resolved' : 'Expired'}
+            </span>
+            <span className="flex items-center">
+              <TrendingUp className="h-4 w-4 mr-1" />
+              ${bet.totalPool} Pool
+            </span>
+            {bet.odds && (
+              <span className="flex items-center">
+                <Trophy className="h-4 w-4 mr-1" />
+                {bet.odds.map((odd, index) =>
+                  `${bet.options[index]}: ${odd.toFixed(1)}%`
+                ).join(' | ')}
+              </span>
+            )}
+          </div>
+
+          {/* Debug info for development */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mt-2 text-xs text-gray-500">
+              ID: {bet.id} | Resolved: {bet.isResolved ? 'Yes' : 'No'} | Time: {timeRemaining}
+            </div>
+          )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
-          <span className="flex items-center">
-            <Clock className="h-4 w-4 mr-1" />
-            {status === 'active' ? timeRemaining : status === 'resolved' ? 'Resolved' : 'Expired'}
-          </span>
-          <span className="flex items-center">
-            <TrendingUp className="h-4 w-4 mr-1" />
-            ${bet.totalPool} Pool
-          </span>
-        </div>
-
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex space-x-2 ml-4">
           {bet.options.map((option, index) => (
             <button
               key={index}
@@ -310,21 +332,19 @@ function BetItem({
                 console.log(`🎯 Clicking ${option} for bet ${bet.id}`);
                 onBetClick(bet, index === 0 ? 'yes' : 'no');
               }}
-              className={`flex-1 px-4 py-3 rounded-lg font-medium text-sm transition-colors ${
+              className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
                 index === 0
                   ? 'bg-green-100 text-green-700 hover:bg-green-200'
                   : 'bg-red-100 text-red-700 hover:bg-red-200'
               } ${status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''}`}
               disabled={status !== 'active'}
             >
-              <div className="text-center">
-                <div className="font-semibold">{option}</div>
-                {bet.odds && (
-                  <div className="text-xs opacity-75 mt-1">
-                    {bet.odds[index].toFixed(1)}%
-                  </div>
-                )}
-              </div>
+              {option}
+              {bet.odds && (
+                <span className="block text-xs opacity-75">
+                  {bet.odds[index].toFixed(1)}%
+                </span>
+              )}
             </button>
           ))}
         </div>

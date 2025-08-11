@@ -51,51 +51,54 @@ export function Navbar() {
 
 
   return (
-    <nav className="bg-white border-b border-gray-100 sticky top-0 z-40">
+    <nav className="bg-white border-b border-gray-100 sticky top-0 z-40 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+        <div className="flex items-center justify-between h-14 md:h-16">
           {/* Logo */}
-          <Link href="/" className="text-xl font-bold text-gray-900">
+          <Link href="/" className="text-lg md:text-xl font-bold text-gray-900 flex-shrink-0">
             OverUnder
           </Link>
 
           {/* Navigation Links - Desktop */}
-          <div className="hidden md:flex items-center space-x-8">
+          <div className="hidden md:flex items-center space-x-6 lg:space-x-8">
             <Link
               href="/"
-              className="text-gray-600 hover:text-gray-900 font-medium"
+              className="text-gray-600 hover:text-gray-900 font-medium text-sm lg:text-base transition-colors"
             >
               Markets
             </Link>
             <Link
               href="/communities"
-              className="text-gray-600 hover:text-gray-900 font-medium"
+              className="text-gray-600 hover:text-gray-900 font-medium text-sm lg:text-base transition-colors"
             >
               Communities
             </Link>
           </div>
 
           {/* Right side - Only render after mount to prevent hydration errors */}
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 md:space-x-4">
             {!isMounted ? (
               // Skeleton loader while mounting
-              <div className="bg-gray-200 animate-pulse h-10 w-32 rounded-lg"></div>
+              <div className="bg-gray-200 animate-pulse h-8 md:h-10 w-24 md:w-32 rounded-lg"></div>
             ) : user ? (
               <>
-                {/* ETH Balance */}
+                {/* ETH Balance - Responsive */}
                 {balanceLoading ? (
-                  <div className="bg-gray-100 border border-gray-200 px-3 py-1 rounded-full animate-pulse">
-                    <span className="text-sm font-medium text-gray-500">Loading...</span>
+                  <div className="bg-gray-100 border border-gray-200 px-2 md:px-3 py-1 rounded-full animate-pulse">
+                    <span className="text-xs md:text-sm font-medium text-gray-500">Loading...</span>
                   </div>
                 ) : ethBalance ? (
-                  <div className="bg-blue-50 border border-blue-200 px-3 py-1 rounded-full">
-                    <span className="text-sm font-medium text-blue-800">
-                      {parseFloat(formatEther(ethBalance.value)).toFixed(4)} ETH
-                    </span>
+                  <div className="bg-blue-50 border border-blue-200 px-2 md:px-3 py-1 rounded-full">
+                    <div className="flex items-center space-x-1">
+                      <Wallet className="h-3 w-3 md:h-4 md:w-4 text-blue-600" />
+                      <span className="text-xs md:text-sm font-medium text-blue-800">
+                        {parseFloat(formatEther(ethBalance.value)).toFixed(4)} ETH
+                      </span>
+                    </div>
                   </div>
                 ) : balanceError ? (
-                  <div className="bg-red-50 border border-red-200 px-3 py-1 rounded-full">
-                    <span className="text-sm font-medium text-red-800">Balance Error</span>
+                  <div className="bg-red-50 border border-red-200 px-2 md:px-3 py-1 rounded-full">
+                    <span className="text-xs md:text-sm font-medium text-red-800">Balance Error</span>
                   </div>
                 ) : address ? (
                   <div className="bg-gray-50 border border-gray-200 px-3 py-1 rounded-full">
@@ -106,16 +109,16 @@ export function Navbar() {
                 {/* Create Button - Desktop */}
                 <Link
                   href="/bets/new"
-                  className="hidden md:inline-flex items-center px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
+                  className="hidden lg:inline-flex items-center px-3 lg:px-4 py-2 bg-gray-900 text-white rounded-lg text-xs lg:text-sm font-medium hover:bg-gray-800 transition-colors"
                 >
-                  <Plus className="h-4 w-4 mr-2" />
+                  <Plus className="h-3 w-3 lg:h-4 lg:w-4 mr-1 lg:mr-2" />
                   Create Bet
                 </Link>
 
-                {/* Create Button - Mobile */}
+                {/* Create Button - Mobile/Tablet */}
                 <Link
                   href="/bets/new"
-                  className="md:hidden bg-gray-900 text-white p-2 rounded-full hover:bg-gray-800 transition-colors"
+                  className="lg:hidden bg-gray-900 text-white p-2 rounded-full hover:bg-gray-800 transition-colors"
                 >
                   <Plus className="h-4 w-4" />
                 </Link>
@@ -124,10 +127,10 @@ export function Navbar() {
                 <div className="relative">
                   <button
                     onClick={() => setIsMenuOpen(!isMenuOpen)}
-                    className="flex items-center space-x-2 bg-gray-100 px-3 py-2 rounded-lg hover:bg-gray-200 transition-colors"
+                    className="flex items-center space-x-1 md:space-x-2 bg-gray-100 px-2 md:px-3 py-2 rounded-lg hover:bg-gray-200 transition-colors"
                   >
                     <User className="h-4 w-4 text-gray-600" />
-                    <span className="text-sm font-medium text-gray-700">
+                    <span className="hidden sm:block text-xs md:text-sm font-medium text-gray-700 max-w-20 truncate">
                       {user.username}
                     </span>
                   </button>
@@ -193,14 +196,26 @@ export function Navbar() {
             )}
           </div>
         </div>
-        {/* Custodial System Notice - Only show after mount */}
-        {isMounted && user && (
-          <div className="bg-blue-50 border-b border-blue-200 px-4 py-2">
-            <p className="text-xs text-blue-800 text-center">
-              <strong>Custodial Wallet:</strong> Your funds are managed securely. No MetaMask required!
-            </p>
+
+        {/* Mobile Navigation Menu */}
+        <div className="md:hidden border-t border-gray-100">
+          <div className="px-4 py-3 space-y-1">
+            <Link
+              href="/"
+              className="block px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md font-medium text-sm transition-colors"
+            >
+              Markets
+            </Link>
+            <Link
+              href="/communities"
+              className="block px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md font-medium text-sm transition-colors"
+            >
+              Communities
+            </Link>
           </div>
-        )}
+        </div>
+
+
       </div>
     </nav>
   );

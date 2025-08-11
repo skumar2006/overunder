@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
+import { usePrivyAuth } from '@/hooks/usePrivyAuth';
 import { Navbar } from '@/components/navigation/navbar';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { BetModal } from '@/components/bets/bet-modal';
+import { BetModalV2 } from '@/components/bets/BetModalV2';
 import { ResolutionModal } from '@/components/bets/ResolutionModal';
 import { DisputePanel } from '@/components/bets/DisputePanel';
 import { supabase } from '@/lib/supabase';
@@ -61,7 +61,7 @@ interface BetDetail {
 
 export default function BetDetailPage() {
   const params = useParams();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = usePrivyAuth();
   const router = useRouter();
   const [bet, setBet] = useState<BetDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -158,17 +158,8 @@ export default function BetDetailPage() {
   };
 
   const fetchUserBalance = async () => {
-    if (!user) return;
-
-    const { data } = await supabase
-      .from('wallet_balances')
-      .select('balance')
-      .eq('user_id', user.id)
-      .single();
-
-    if (data) {
-      setUserBalance(data.balance);
-    }
+    // No longer using custodial balance - real ETH balance is shown in navbar
+    setUserBalance(0);
   };
 
   const handleBet = (side: 'yes' | 'no') => {
@@ -413,21 +404,33 @@ export default function BetDetailPage() {
         </div>
       </main>
 
-      {showBetModal && (
-        <BetModal
+      {showBetModal && bet && (
+        <BetModalV2
           isOpen={showBetModal}
           onClose={() => setShowBetModal(false)}
           bet={{
-            id: bet.id,
+            id: parseInt(bet.id),
+            betId: parseInt(bet.id),
+            question: bet.description,
             description: bet.description,
-            creator: bet.creator,
-            fixed_share_price: bet.fixed_share_price,
-            yes_shares: bet.stats.yes_shares,
-            no_shares: bet.stats.no_shares,
+            creator: bet.creator.username,
+            options: ['Yes', 'No'],
+            deadline: new Date(bet.deadline),
+            timeRemaining: Math.max(0, Math.floor((new Date(bet.deadline).getTime() - Date.now()) / 1000)),
+            totalPayout: bet.stats.total_pool.toString(),
+            status: bet.resolution_status === 'resolved' ? 'resolved' : 'active',
+            winningOption: bet.resolved_outcome ? (bet.resolved_outcome === 'yes' ? 0 : 1) : undefined,
+            category: 'prediction',
+            yesPool: bet.stats.yes_shares.toString(),
+            noPool: bet.stats.no_shares.toString(),
+            totalPool: bet.stats.total_pool.toString(),
+            totalPoolAmount: bet.stats.total_pool.toString(),
+            odds: [
+              (bet.stats.yes_shares / (bet.stats.yes_shares + bet.stats.no_shares)) * 100,
+              (bet.stats.no_shares / (bet.stats.yes_shares + bet.stats.no_shares)) * 100
+            ],
+            isResolved: bet.resolution_status === 'resolved'
           }}
-          side={betSide}
-          userBalance={userBalance}
-          onConfirm={handleConfirmBet}
         />
       )}
 
