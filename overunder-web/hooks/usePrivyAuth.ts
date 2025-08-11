@@ -4,27 +4,7 @@ import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { useAccount, useChainId } from 'wagmi';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import CryptoJS from 'crypto-js';
 
-function uuidFromString(input: string): string {
-  const hashHex = CryptoJS.SHA1(input).toString();
-  // Take first 16 bytes (32 hex chars)
-  let hex = hashHex.slice(0, 32).toLowerCase();
-  // Ensure version (5) and variant (RFC4122)
-  // Set the 13th hex char (index 12) to '5'
-  hex = hex.slice(0, 12) + '5' + hex.slice(13);
-  // Set the 17th hex char (index 16) high bits to 10xx -> 8,9,a,b; force to 'a'
-  const variantNibble = 'a';
-  hex = hex.slice(0, 16) + variantNibble + hex.slice(17);
-  // Format as UUID: 8-4-4-4-12
-  return [
-    hex.slice(0, 8),
-    hex.slice(8, 12),
-    hex.slice(12, 16),
-    hex.slice(16, 20),
-    hex.slice(20, 32),
-  ].join('-');
-}
 
 export interface User {
   id: string;
@@ -58,8 +38,8 @@ export function usePrivyAuth() {
   useEffect(() => {
     async function initializeUser() {
       if (!ready) {
-        // Do not block UI while Privy bootstraps; allow login button to be clickable
-        setLoading(false);
+        // Keep loading true while Privy bootstraps
+        setLoading(true);
         return;
       }
 
@@ -70,53 +50,146 @@ export function usePrivyAuth() {
         return;
       }
 
-      try {
-        // Map Privy DID to UUID for DB compatibility
-        const privyDid = privyUser.id; // e.g., did:privy:xxxx
-        const userId = uuidFromString(privyDid);
-        const email = privyUser.email?.address;
-        const walletAddress = address;
+      // Set loading true while creating/fetching user
+      setLoading(true);
 
-        // Check if user exists in Supabase
-        let { data: existingUser } = await supabase
+      console.log('🔍 Starting user initialization...', {
+        hasPrivyUser: !!privyUser,
+        privyUserId: privyUser?.id,
+        authenticated,
+        ready,
+        address
+      });
+
+      try {
+        // Extract UUID from Privy user - sometimes it's in id, sometimes in userId
+        let userId = privyUser.id;
+        
+        // If the id is a DID format, look for the actual UUID in other fields
+        if (userId.startsWith('did:privy:')) {
+          // Try to get the UUID from other fields or extract from DID
+          userId = privyUser.userId || privyUser.sub || userId.replace('did:privy:', '');
+        }
+        
+        console.log('🔍 Privy User Debug:', {
+          originalId: privyUser.id,
+          extractedUserId: userId,
+          userId: privyUser.userId,
+          sub: privyUser.sub,
+          allFields: Object.keys(privyUser)
+        });
+        
+        const email = privyUser.email?.address;
+        
+        // Get wallet address from Privy user object (embedded wallet) or wagmi
+        let walletAddress = address; // From wagmi useAccount
+        
+        // If wagmi doesn't have address yet, try to get from Privy embedded wallet
+        if (!walletAddress && privyUser.wallet) {
+          walletAddress = privyUser.wallet.address;
+        }
+        
+        // If still no address, try from wallets array
+        if (!walletAddress && wallets && wallets.length > 0) {
+          walletAddress = wallets[0].address;
+        }
+
+
+
+        console.log('🔍 Attempting to fetch user from Supabase with ID:', userId);
+        
+        // Try to fetch user from Supabase (may fail due to RLS)
+        let { data: existingUser, error: fetchError } = await supabase
           .from('users')
           .select('*')
           .eq('id', userId)
           .single();
+          
+        console.log('🔍 Supabase fetch result:', {
+          existingUser,
+          fetchError,
+          fetchErrorCode: fetchError?.code,
+          fetchErrorMessage: fetchError?.message,
+          fetchErrorDetails: fetchError?.details,
+          fetchErrorHint: fetchError?.hint
+        });
+
+
 
         if (!existingUser && email) {
-          // Create user if doesn't exist
-          const { data: newUser } = await supabase
-            .from('users')
-            .insert({
-              id: userId,
-              email,
-              username: email.split('@')[0],
-              wallet_address: walletAddress,
-            })
-            .select()
-            .single();
-
-          existingUser = newUser;
-
-          // Create initial balance for new users
-          if (newUser) {
-            await supabase
-              .from('wallet_balances')
-              .insert({
-                user_id: userId,
-                balance: 1000.00, // $1000 starting balance
+          // Create user via server API to bypass RLS
+          try {
+            const response = await fetch('/api/users', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: userId,
+                email,
+                username: email.split('@')[0],
+                wallet_address: walletAddress,
+              }),
+            });
+            
+            console.log('🔍 Server API response status:', response.status, response.statusText);
+            
+            if (response.ok) {
+              const { data: userData } = await response.json();
+              console.log('✅ User created via server API:', userData);
+              existingUser = userData;
+            } else {
+              const errorData = await response.json().catch(() => ({}));
+              console.error('❌ Server API error:', {
+                status: response.status,
+                statusText: response.statusText,
+                errorData
               });
+              throw new Error(`Server API error: ${response.status} - ${JSON.stringify(errorData)}`);
+            }
+          } catch (apiError) {
+            // Fall back to direct Supabase insert
+            const { data: newUser, error: insertError } = await supabase
+              .from('users')
+              .insert({
+                id: userId,
+                email,
+                username: email.split('@')[0],
+                wallet_address: walletAddress,
+              })
+              .select()
+              .single();
+            
+            if (!insertError) {
+              existingUser = newUser;
+            } else {
+              throw insertError;
+            }
           }
+
+          // Create initial balance for new users (handled by server API)
+          // The /api/users endpoint already creates the wallet balance
         }
 
-        // Update wallet address if it changed
+        // Update wallet address if it changed or was previously null
         if (existingUser && walletAddress && existingUser.wallet_address !== walletAddress) {
-          await supabase
-            .from('users')
-            .update({ wallet_address: walletAddress })
-            .eq('id', userId);
-          existingUser.wallet_address = walletAddress;
+          try {
+            await supabase
+              .from('users')
+              .update({ wallet_address: walletAddress })
+              .eq('id', userId);
+            existingUser.wallet_address = walletAddress;
+          } catch (updateError) {
+            // Try via server API if direct update fails
+            try {
+              await fetch('/api/users/update-wallet', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, walletAddress }),
+              });
+              existingUser.wallet_address = walletAddress;
+            } catch (apiError) {
+              // Silently fail - not critical
+            }
+          }
         }
 
         // Get user balance
@@ -136,15 +209,44 @@ export function usePrivyAuth() {
 
       } catch (error) {
         console.error('Error initializing user:', error);
-        setUser(null);
-        setBalance(0);
+        console.error('Error details:', {
+          message: error?.message || 'No message',
+          code: error?.code || 'No code',
+          details: error?.details || 'No details',
+          stack: error?.stack || 'No stack',
+          name: error?.name || 'No name',
+          cause: error?.cause || 'No cause',
+          toString: error?.toString?.() || 'Cannot stringify',
+          keys: Object.keys(error || {}),
+          errorType: typeof error,
+          isError: error instanceof Error
+        });
+        
+        // Fallback: Create a basic user object even if Supabase fails
+        if (privyUser) {
+          const userId = privyUser.id;
+          const email = privyUser.email?.address;
+          
+          setUser({
+            id: userId,
+            email: email,
+            username: email?.split('@')[0] || 'user',
+            wallet_address: address,
+          });
+          setBalance(1000); // Default balance
+        } else {
+          setUser(null);
+          setBalance(0);
+        }
       } finally {
         setLoading(false);
       }
     }
 
     initializeUser();
-  }, [ready, authenticated, privyUser, address]);
+  }, [ready, authenticated, privyUser?.id]);
+
+
 
   return {
     // User state

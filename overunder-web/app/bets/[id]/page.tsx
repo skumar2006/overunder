@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { BetModal } from '@/components/bets/bet-modal';
+import { ResolutionModal } from '@/components/bets/ResolutionModal';
+import { DisputePanel } from '@/components/bets/DisputePanel';
 import { supabase } from '@/lib/supabase';
 import { Line, LineChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
 import { 
@@ -64,6 +66,7 @@ export default function BetDetailPage() {
   const [bet, setBet] = useState<BetDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [showBetModal, setShowBetModal] = useState(false);
+  const [showResolutionModal, setShowResolutionModal] = useState(false);
   const [betSide, setBetSide] = useState<'yes' | 'no'>('yes');
   const [userBalance, setUserBalance] = useState(100);
   
@@ -425,6 +428,31 @@ export default function BetDetailPage() {
           side={betSide}
           userBalance={userBalance}
           onConfirm={handleConfirmBet}
+        />
+      )}
+
+      {showResolutionModal && bet && user && (
+        <ResolutionModal
+          bet={{
+            id: bet.id,
+            creator_id: bet.creator.id,
+            question: bet.description,
+            description: bet.description,
+            options: bet.bet_type === 'binary' ? ['Yes', 'No'] : ['Over', 'Under'],
+            deadline: bet.deadline,
+            isResolved: bet.resolution_status === 'resolved',
+            totalPool: bet.stats.total_pool,
+            odds: bet.bet_type === 'binary' 
+              ? [bet.stats.yes_shares / (bet.stats.yes_shares + bet.stats.no_shares) * 100,
+                 bet.stats.no_shares / (bet.stats.yes_shares + bet.stats.no_shares) * 100]
+              : [50, 50]
+          }}
+          onClose={() => setShowResolutionModal(false)}
+          onResolutionProposed={() => {
+            setShowResolutionModal(false);
+            fetchBetDetails();
+          }}
+          userId={user.id}
         />
       )}
     </div>

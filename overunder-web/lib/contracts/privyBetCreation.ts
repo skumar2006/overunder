@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabase';
 import contractData from './OverunderUpgradeable.json';
 import { getEnvironmentConfig, getContractConfig } from './config';
 
-const FRESH_ABI = JSON.parse(contractData.abi);
+const FRESH_ABI = contractData.abi;
 
 export interface CreateBetParams {
   question: string;

@@ -3,12 +3,40 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePrivyAuth } from '@/hooks/usePrivyAuth';
+import { useBalance } from 'wagmi';
+import { formatEther } from 'viem';
 import { Menu, X, User, LogOut, Plus, Wallet } from 'lucide-react';
 
 export function Navbar() {
-  const { user, loading, logout, balance } = usePrivyAuth();
+  const { user, loading, logout, address } = usePrivyAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+
+  // Get on-chain ETH balance
+  const { data: ethBalance, isLoading: balanceLoading, error: balanceError } = useBalance({
+    address: address as `0x${string}` | undefined,
+    chainId: 84532, // Base Sepolia
+    query: {
+      enabled: !!address, // Only fetch when address is available
+      refetchInterval: 10000, // Refetch every 10 seconds
+    },
+  });
+
+  // Debug balance (only in development)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('💰 Balance Debug:', {
+      address,
+      hasAddress: !!address,
+      ethBalance: ethBalance ? formatEther(ethBalance.value) : 'null',
+      ethBalanceRaw: ethBalance?.value?.toString(),
+      balanceLoading,
+      balanceError: balanceError?.message,
+      chainId: 84532,
+      isMounted
+    });
+  }
+
+
 
   // Prevent hydration errors by only rendering user-dependent UI after mount
   useEffect(() => {
@@ -54,12 +82,26 @@ export function Navbar() {
               <div className="bg-gray-200 animate-pulse h-10 w-32 rounded-lg"></div>
             ) : user ? (
               <>
-                {/* Balance */}
-                <div className="bg-green-50 border border-green-200 px-3 py-1 rounded-full">
-                  <span className="text-sm font-medium text-green-800">
-                    ${balance.toFixed(0)}
-                  </span>
-                </div>
+                {/* ETH Balance */}
+                {balanceLoading ? (
+                  <div className="bg-gray-100 border border-gray-200 px-3 py-1 rounded-full animate-pulse">
+                    <span className="text-sm font-medium text-gray-500">Loading...</span>
+                  </div>
+                ) : ethBalance ? (
+                  <div className="bg-blue-50 border border-blue-200 px-3 py-1 rounded-full">
+                    <span className="text-sm font-medium text-blue-800">
+                      {parseFloat(formatEther(ethBalance.value)).toFixed(4)} ETH
+                    </span>
+                  </div>
+                ) : balanceError ? (
+                  <div className="bg-red-50 border border-red-200 px-3 py-1 rounded-full">
+                    <span className="text-sm font-medium text-red-800">Balance Error</span>
+                  </div>
+                ) : address ? (
+                  <div className="bg-gray-50 border border-gray-200 px-3 py-1 rounded-full">
+                    <span className="text-sm font-medium text-gray-600">0.0000 ETH</span>
+                  </div>
+                ) : null}
 
                 {/* Create Button - Desktop */}
                 <Link
@@ -102,9 +144,11 @@ export function Navbar() {
                           <div className="px-4 py-2 border-b border-gray-100">
                             <p className="text-sm font-medium text-gray-900">{user.username}</p>
                             <p className="text-xs text-gray-500">{user.email}</p>
-                            <p className="text-xs text-gray-400 font-mono mt-1">
-                              Balance: ${balance.toFixed(0)}
-                            </p>
+                            {ethBalance && (
+                              <p className="text-xs text-gray-400 font-mono mt-1">
+                                ETH: {parseFloat(formatEther(ethBalance.value)).toFixed(4)}
+                              </p>
+                            )}
                           </div>
                           
                           <Link

@@ -13,6 +13,7 @@ import {
 } from '@/lib/contracts/custodialHooks';
 import { BetModal } from '@/components/bets/bet-modal';
 import { Navbar } from '@/components/navigation/navbar';
+
 import { Plus, TrendingUp, Users, Clock, Trophy } from 'lucide-react';
 
 export default function HomePage() {
@@ -24,27 +25,10 @@ export default function HomePage() {
 
   // Do not redirect; render homepage even if not authenticated
 
-  // Debug logging
-  console.log('🔍 Homepage Debug:', {
-    user,
-    address,
-    isConnected,
-    custodialSystem: true
-  });
-
   // Fetch all bet IDs from contract
   const { data: betIds, loading: betsLoading, error: betsError } = useGetAllBets();
 
-  // Enhanced debugging for bet loading
-  console.log('📊 Bet Loading Debug:', {
-    betIds,
-    betsLoading,
-    betsError,
-    betIdsLength: betIds?.length
-  });
-
   const openBetModal = (bet: BetData, side: 'yes' | 'no') => {
-    console.log('🎯 Opening bet modal:', { bet, side });
     setSelectedBet(bet);
     setBetSide(side);
   };
@@ -110,7 +94,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar />
+        <Navbar />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
@@ -121,11 +105,10 @@ export default function HomePage() {
           {/* Development Notice */}
           {process.env.NODE_ENV === 'development' && (
             <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
-              <strong>✅ Base Sepolia Connected:</strong> Blockchain is connected successfully! 
-              {betIds && betIds.length > 0 
-                ? `Showing ${betIds.length} real on-chain bets.`
-                : 'No bets created yet - showing 5 sample bets for testing. Create your first bet!'
-              }
+              <strong>✅ Base Sepolia Connected:</strong> Blockchain is connected successfully!
+              {betIds && betIds.length > 0
+                ? ` Showing ${betIds.length} on-chain bets.`
+                : ' No bets created yet. Create your first bet!'}
             </div>
           )}
         </div>

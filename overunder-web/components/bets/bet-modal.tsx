@@ -2,7 +2,9 @@
 
 import { useState } from 'react';
 import { X, Clock, TrendingUp, DollarSign, Loader2 } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+import { usePrivyAuth } from '@/hooks/usePrivyAuth';
+import { useBalance } from 'wagmi';
+import { formatEther, parseEther } from 'viem';
 import { BetData } from '@/lib/contracts/custodialHooks';
 import { toast } from '@/components/ui/toaster';
 
@@ -13,9 +15,21 @@ interface BetModalProps {
 }
 
 export function BetModal({ bet, side, onClose }: BetModalProps) {
-  const { user, balance } = useAuth();
-  const [amount, setAmount] = useState(10); // Amount in USD
+  const { user, address } = usePrivyAuth();
+  const [amount, setAmount] = useState(0.01); // Amount in ETH
   const [isLoading, setIsLoading] = useState(false);
+
+  // Get real ETH balance
+  const { data: ethBalance } = useBalance({
+    address: address as `0x${string}` | undefined,
+    chainId: 84532, // Base Sepolia
+    query: {
+      enabled: !!address,
+      refetchInterval: 10000,
+    },
+  });
+
+  const ethBalanceFormatted = ethBalance ? parseFloat(formatEther(ethBalance.value)) : 0;
 
   // Calculate option index (0 for first option, 1 for second option, etc.)
   const optionIndex = side === 'yes' ? 0 : 1;
@@ -26,7 +40,7 @@ export function BetModal({ bet, side, onClose }: BetModalProps) {
   
   // Check if betting is still allowed
   const isActive = bet.status === 'active';
-  const canBet = user && isActive && amount > 0 && amount <= balance;
+  const canBet = user && isActive && amount > 0 && amount <= ethBalanceFormatted;
 
   // Comprehensive debugging
   console.log('🔍 BetModal Debug:', {
@@ -39,12 +53,9 @@ export function BetModal({ bet, side, onClose }: BetModalProps) {
       bettingOptions: bet.bettingOptions,
       odds: bet.odds
     },
-    isConnected,
-    address,
     amount,
     isActive,
     canBet,
-    hasPlaceWager: !!placeWager,
     side,
     optionIndex
   });
@@ -144,13 +155,11 @@ export function BetModal({ bet, side, onClose }: BetModalProps) {
           {process.env.NODE_ENV === 'development' && (
             <div className="mb-4 p-3 bg-gray-100 rounded-lg text-xs">
               <div><strong>Debug:</strong></div>
-              <div>Connected: {isConnected ? 'Yes' : 'No'}</div>
               <div>Active: {isActive ? 'Yes' : 'No'}</div>
               <div>Resolved: {bet.isResolved ? 'Yes' : 'No'}</div>
               <div>Time Left: {bet.timeRemaining}</div>
               <div>Amount: {amount}</div>
               <div>Can Bet: {canBet ? 'Yes' : 'No'}</div>
-              <div>Place Wager: {placeWager ? 'Available' : 'Not Available'}</div>
               <div>Bet ID: {bet.betId}</div>
               <div>Options: {bet.bettingOptions?.join(', ')}</div>
             </div>
@@ -216,27 +225,30 @@ export function BetModal({ bet, side, onClose }: BetModalProps) {
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm font-medium text-gray-700">Bet Amount</span>
                 <div className="flex items-center text-gray-900">
-                  <DollarSign className="h-4 w-4 mr-1" />
-                  <span className="text-lg font-bold">${amount}</span>
+                  <span className="text-lg font-bold">Ξ{amount.toFixed(4)}</span>
                 </div>
               </div>
               
               <input
                 type="range"
-                min="1"
-                max="500"
-                step="1"
+                min="0.001"
+                max={Math.min(ethBalanceFormatted, 1)}
+                step="0.001"
                 value={amount}
                 onChange={handleSliderChange}
                 className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                 style={{
-                  background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${(amount / 500) * 100}%, #E5E7EB ${(amount / 500) * 100}%, #E5E7EB 100%)`
+                  background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${(amount / Math.min(ethBalanceFormatted, 1)) * 100}%, #E5E7EB ${(amount / Math.min(ethBalanceFormatted, 1)) * 100}%, #E5E7EB 100%)`
                 }}
               />
               
               <div className="flex justify-between text-xs text-gray-500 mt-2">
-                <span>$1</span>
-                <span>$500</span>
+                <span>Ξ0.001</span>
+                <span>Ξ{Math.min(ethBalanceFormatted, 1).toFixed(3)}</span>
+              </div>
+              
+              <div className="text-xs text-gray-500 mt-1 text-center">
+                Available: Ξ{ethBalanceFormatted.toFixed(4)}
               </div>
             </div>
           </div>
@@ -248,7 +260,7 @@ export function BetModal({ bet, side, onClose }: BetModalProps) {
                 Potential Payout if {side.toUpperCase()} wins
               </p>
               <p className="text-2xl font-bold text-gray-900">
-                ${potentialPayout.toFixed(0)}
+                Ξ{potentialPayout.toFixed(4)}
               </p>
               <p className="text-xs text-gray-500 mt-1">
                 {((potentialPayout / amount - 1) * 100).toFixed(0)}% profit
@@ -271,10 +283,10 @@ export function BetModal({ bet, side, onClose }: BetModalProps) {
               'Sign In to Bet'
             ) : !isActive ? (
               'Betting Closed'
-            ) : amount > balance ? (
-              'Insufficient Balance'
+            ) : amount > ethBalanceFormatted ? (
+              'Insufficient ETH Balance'
             ) : (
-              `Place $${amount} Bet`
+              `Place Ξ${amount.toFixed(4)} Bet`
             )}
           </button>
           
@@ -298,7 +310,7 @@ export function BetModal({ bet, side, onClose }: BetModalProps) {
           {user && isActive && (
             <div className="text-center mt-4">
               <p className="text-xs text-gray-500">
-                Balance: ${balance.toFixed(0)} • {user.username}
+                ETH Balance: Ξ{ethBalanceFormatted.toFixed(4)} • {user.username}
               </p>
             </div>
           )}

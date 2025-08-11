@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Navbar } from '@/components/navigation/navbar';
+import { AuthGuard } from '@/components/AuthGuard';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/toaster';
 import { extractBetIdFromReceipt, createSupabaseBetData } from '@/lib/contracts';
@@ -61,28 +62,18 @@ export default function CreateBetPage() {
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/login');
-    } else if (user) {
-      // Custodial system: No wallet connection required
+    } else if (user && !communities.length) {
+      // Only fetch communities if we don't have them yet
       fetchUserCommunities();
     }
-  }, [user, authLoading, router]);
+  }, [user?.id, authLoading]);
 
-  // Handle successful transaction (custodial system)
+  // Handle successful transaction
   useEffect(() => {
-    if (txHash && txHash.includes('mock')) {
-      // For custodial system, simulate transaction success
-      setTimeout(() => {
-        const mockReceipt = {
-          transactionHash: txHash,
-          blockNumber: Math.floor(Math.random() * 1000000),
-          status: 'success'
-        };
-        handleTransactionSuccess(mockReceipt);
-      }, 2000); // Simulate 2 second confirmation time
-    } else if (txSuccess && txReceipt) {
+    if (txSuccess && txReceipt) {
       handleTransactionSuccess(txReceipt);
     }
-  }, [txHash, txSuccess, txReceipt]);
+  }, [txSuccess, txReceipt]);
 
   const fetchUserCommunities = async () => {
     if (!supabase || !user) return;
@@ -101,6 +92,20 @@ export default function CreateBetPage() {
       setCommunities(userCommunities);
     } catch (error) {
       console.error('Error fetching user communities:', error);
+      console.error('Communities error details:', {
+        message: error?.message || 'No message',
+        code: error?.code || 'No code',
+        details: error?.details || 'No details',
+        stack: error?.stack || 'No stack',
+        name: error?.name || 'No name',
+        toString: error?.toString?.() || 'Cannot stringify',
+        keys: Object.keys(error || {}),
+        errorType: typeof error,
+        isError: error instanceof Error,
+        hasSupabase: !!supabase,
+        hasUser: !!user,
+        userId: user?.id
+      });
       toast('Failed to load communities', 'error');
     } finally {
       setLoading(false);
@@ -111,9 +116,8 @@ export default function CreateBetPage() {
     try {
       console.log('Transaction receipt:', receipt);
       
-      // Extract bet ID from transaction logs or fall back to pendingBetId (custodial/mock flow)
-      const extractedId = extractBetIdFromReceipt(receipt);
-      const onchainBetId = extractedId ?? pendingBetId;
+      // Extract bet ID from transaction logs
+      const onchainBetId = extractBetIdFromReceipt(receipt);
       
       if (!onchainBetId) {
         throw new Error('Could not extract bet ID from transaction receipt');
@@ -129,15 +133,60 @@ export default function CreateBetPage() {
 
       console.log('Storing bet in Supabase:', betData);
 
-      const { data: supabaseBet, error } = await supabase
-        .from('bets')
-        .insert(betData)
-        .select()
-        .single();
+      // First attempt: insert with on-chain fields
+      let supabaseBet: any | null = null;
+      try {
+        const { data, error } = await supabase
+          .from('bets')
+          .insert(betData)
+          .select()
+          .single();
+        if (error) throw error;
+        supabaseBet = data;
+      } catch (err: any) {
+        // If the schema doesn't yet have onchain fields, retry without them to unblock UX
+        const msg: string = err?.message || '';
+        const code: string | undefined = err?.code;
+        const details: string = err?.details || '';
+        const hint: string = err?.hint || '';
+        const missingOnchainFields =
+          code === 'PGRST204' ||
+          msg.includes('onchain_bet_id') ||
+          msg.includes('onchain_tx_hash') ||
+          details.includes('onchain_bet_id') ||
+          details.includes('onchain_tx_hash') ||
+          hint.includes('onchain_bet_id') ||
+          hint.includes('onchain_tx_hash');
 
-      if (error) {
-        console.error('Supabase error:', error);
-        throw new Error(`Database error: ${error.message}`);
+        if (missingOnchainFields) {
+          console.warn('Missing on-chain columns in bets table. Retrying insert without on-chain fields. Error:', err, JSON.stringify(err));
+          const { onchain_bet_id, onchain_tx_hash, ...fallbackData } = betData as any;
+          const { data, error } = await supabase
+            .from('bets')
+            .insert(fallbackData)
+            .select()
+            .single();
+          if (error) throw error;
+          supabaseBet = data;
+        } else if (code === '42501' || msg.toLowerCase().includes('row-level security') || (err?.message && err.message.includes('row-level security'))) {
+          // RLS violation: call server API with service role
+          console.warn('RLS prevented client insert. Falling back to server API. Error:', err);
+          const res = await fetch('/api/bets', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(betData),
+          });
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            throw new Error(`Server insert failed: ${body?.error?.message || body?.error || res.statusText}`);
+          }
+          const body = await res.json();
+          supabaseBet = body?.data;
+        } else {
+          // Re-throw with best-available info
+          const reason = msg || code || JSON.stringify(err) || 'Unknown error';
+          throw new Error(`Database error: ${reason}`);
+        }
       }
 
       console.log('Bet stored successfully:', supabaseBet);
@@ -146,8 +195,9 @@ export default function CreateBetPage() {
       router.push(`/bets/${supabaseBet.id}`);
       
     } catch (error: any) {
-      console.error('Error storing bet in Supabase:', error);
-      toast(`Bet created on-chain but failed to store: ${error.message}`, 'error');
+      console.error('Error storing bet in Supabase:', error, JSON.stringify(error));
+      const message = error?.message || error?.code || 'Unknown database error';
+      toast(`Bet created on-chain but failed to store: ${message}`, 'error');
     } finally {
       setCreatingBet(false);
       setTxHash('');
@@ -284,8 +334,9 @@ export default function CreateBetPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
+    <AuthGuard>
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
       
       <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
@@ -517,6 +568,7 @@ export default function CreateBetPage() {
           </div>
         </div>
       </main>
-    </div>
+      </div>
+    </AuthGuard>
   );
 } 

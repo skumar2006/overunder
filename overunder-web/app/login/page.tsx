@@ -3,20 +3,53 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePrivyAuth } from '@/hooks/usePrivyAuth';
-import { Shield, Gift, TrendingUp, Wallet, Mail } from 'lucide-react';
+import { Shield, Gift, TrendingUp, Wallet, Mail, LogOut } from 'lucide-react';
 
 export default function LoginPage() {
-  const { user, loading, login, authenticated, ready } = usePrivyAuth();
+  const { user, loading, login, logout, authenticated, ready } = usePrivyAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (authenticated && user && !loading) {
-      console.log('User authenticated, redirecting to dashboard...');
-      router.push('/');
+    if (authenticated && user && !loading && ready) {
+      router.replace('/');
     }
-  }, [authenticated, user, loading, router]);
+  }, [authenticated, user, loading, ready, router]);
 
-  // Always render the login UI; redirect effect will navigate when authenticated
+  // Show logout option if user is already authenticated
+  if (authenticated && user && !loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="max-w-md w-full">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+            <div className="text-center mb-8">
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">Already Signed In</h1>
+              <p className="text-gray-600 mb-4">
+                You're already authenticated as {user.email?.address || 'a user'}
+              </p>
+              <div className="space-y-4">
+                <button
+                  onClick={() => router.replace('/')}
+                  className="w-full bg-blue-600 text-white py-3 px-4 rounded-xl font-medium hover:bg-blue-700 transition-colors"
+                >
+                  Go to Dashboard
+                </button>
+                <button
+                  onClick={() => {
+                    console.log('Logging out current user...');
+                    logout();
+                  }}
+                  className="w-full bg-gray-100 text-gray-700 py-3 px-4 rounded-xl font-medium hover:bg-gray-200 transition-colors flex items-center justify-center space-x-2"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Sign Out & Login as Different User</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
@@ -35,8 +68,19 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={async () => {
+                if (authenticated) {
+                  console.log('User already authenticated, redirecting...');
+                  router.replace('/');
+                  return;
+                }
                 console.log('Login: email clicked', { ready });
-                const invoke = () => login({ loginMethods: ['email'] }).catch((e: any) => console.error('Privy login error', e));
+                const invoke = () => {
+                  // Force email login and prevent auto-login
+                  return login({ 
+                    loginMethods: ['email'],
+                    disableSignup: false 
+                  }).catch((e: any) => console.error('Privy login error', e));
+                };
                 if (!ready) {
                   // Retry shortly if SDK not yet ready
                   setTimeout(invoke, 300);
@@ -64,6 +108,11 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={async () => {
+                if (authenticated) {
+                  console.log('User already authenticated, redirecting...');
+                  router.replace('/');
+                  return;
+                }
                 console.log('Login: wallet clicked', { ready });
                 const invoke = () => login().catch((e: any) => console.error('Privy login error', e));
                 if (!ready) {
