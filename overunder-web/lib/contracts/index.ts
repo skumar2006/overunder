@@ -52,22 +52,26 @@ export {
   createSupabaseBetData,
 } from './utils';
 
-// React Hooks
-export {
-  useContractConfig,
-  useGetBet,
-  useGetAllBets,
-  useGetUserBets,
-  useGetUserWagers,
-  useGetBetWagers,
-  useGetUserProfile,
-  useGetUserPosition,
-  useCreateBet,
-  usePlaceWager,
-  useResolveBet,
-  useClaimWinnings,
-  useUpdateProfile,
-  useWaitForTransaction,
-  useContractStatus,
-  useMinimumBetAmount,
-} from './hooks'; 
+// Custodial Bet Creation Hook
+export { useCreateBet } from './betCreationHooks';
+
+// React Hooks - Custodial System (wagmi-based hooks temporarily disabled)
+// TODO: Implement custodial versions of these hooks
+// export {
+//   useContractConfig,   // Causes "chain not defined" error
+//   useGetBet,
+//   useGetAllBets,
+//   useGetUserBets,
+//   useGetUserWagers,
+//   useGetBetWagers,
+//   useGetUserProfile,
+//   useGetUserPosition,
+//   useCreateBet,         // Used in create bet page - needs custodial implementation
+//   usePlaceWager,
+//   useResolveBet,
+//   useClaimWinnings,
+//   useUpdateProfile,
+//   useWaitForTransaction,
+//   useContractStatus,
+//   useMinimumBetAmount,
+// } from './hooks'; 

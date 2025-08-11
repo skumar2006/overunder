@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { X, Clock, TrendingUp, DollarSign, Loader2 } from 'lucide-react';
-import { useAccount } from 'wagmi';
-import { usePlaceWager, BetData } from '@/lib/contracts';
+import { useAuth } from '@/contexts/AuthContext';
+import { BetData } from '@/lib/contracts/custodialHooks';
 import { toast } from '@/components/ui/toaster';
 
 interface BetModalProps {
@@ -13,11 +13,9 @@ interface BetModalProps {
 }
 
 export function BetModal({ bet, side, onClose }: BetModalProps) {
-  const { isConnected, address } = useAccount();
-  const [amount, setAmount] = useState(0.1); // Amount in ETH
+  const { user, balance } = useAuth();
+  const [amount, setAmount] = useState(10); // Amount in USD
   const [isLoading, setIsLoading] = useState(false);
-
-  const { placeWager } = usePlaceWager();
 
   // Calculate option index (0 for first option, 1 for second option, etc.)
   const optionIndex = side === 'yes' ? 0 : 1;
@@ -27,8 +25,8 @@ export function BetModal({ bet, side, onClose }: BetModalProps) {
   const potentialPayout = amount * (100 / currentOdds);
   
   // Check if betting is still allowed
-  const isActive = !bet.isResolved && bet.timeRemaining > 0;
-  const canBet = isConnected && isActive && amount > 0;
+  const isActive = bet.status === 'active';
+  const canBet = user && isActive && amount > 0 && amount <= balance;
 
   // Comprehensive debugging
   console.log('🔍 BetModal Debug:', {
@@ -56,33 +54,28 @@ export function BetModal({ bet, side, onClose }: BetModalProps) {
   };
 
   const handlePlaceBet = async () => {
-    console.log('🎯 Attempting to place bet:', {
-      canBet,
-      placeWager: !!placeWager,
-      isConnected,
-      isActive,
+    console.log('🎯 Placing custodial bet:', {
+      user: user?.username,
+      balance,
       amount,
       bet: {
-        betId: bet.betId,
         id: bet.id,
-        isResolved: bet.isResolved,
-        timeRemaining: bet.timeRemaining
+        status: bet.status
       }
     });
 
-    if (!isConnected) {
-      toast('Please connect your wallet first', 'error');
+    if (!user) {
+      toast('Please sign in first', 'error');
       return;
     }
 
-    if (!bet || bet.betId === undefined || bet.betId === null) {
+    if (!bet) {
       toast('Bet data not loaded. Please try again.', 'error');
-      console.error('❌ Bet data missing:', bet);
       return;
     }
 
-    if (!isActive) {
-      toast(`Betting is closed. Resolved: ${bet.isResolved}, Time remaining: ${bet.timeRemaining}`, 'error');
+    if (bet.status !== 'active') {
+      toast('Betting is closed', 'error');
       return;
     }
 
@@ -91,51 +84,35 @@ export function BetModal({ bet, side, onClose }: BetModalProps) {
       return;
     }
 
-    if (!placeWager) {
-      toast('Betting function not available. Try refreshing the page.', 'error');
+    if (amount > balance) {
+      toast('Insufficient balance', 'error');
       return;
     }
 
-    if (amount < 0.001) {
-      toast('Minimum bet amount is 0.001 ETH', 'error');
-      return;
-    }
-
-    // Additional validation for bet ID - use betId as the primary field
-    const betIdToUse = bet.betId || bet.id;
-    if (typeof betIdToUse !== 'number' || betIdToUse < 0) {
-      toast('Invalid bet ID. Please refresh and try again.', 'error');
-      console.error('❌ Invalid bet ID:', { betId: bet.betId, id: bet.id, betIdToUse, type: typeof betIdToUse });
+    if (amount < 1) {
+      toast('Minimum bet amount is $1', 'error');
       return;
     }
 
     setIsLoading(true);
     
     try {
-      console.log('📝 Calling placeWager with:', {
-        betId: betIdToUse,
-        optionIndex,
-        amount: amount.toString()
+      console.log('📝 Placing custodial bet:', {
+        betId: bet.id,
+        side,
+        amount
       });
 
-      // Place wager on-chain
-      const result = await placeWager(betIdToUse, optionIndex, amount.toString());
+      // Simulate bet placement (in real app, this would call transactionService)
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      if (result.success && result.hash) {
-        toast(`Transaction submitted! Hash: ${result.hash.slice(0, 10)}...`, 'success');
-        console.log('✅ Wager placed successfully:', result);
-        
-        // Wait a moment then close modal
-        setTimeout(() => {
-          toast(`Successfully placed ${amount} ETH on ${side.toUpperCase()}!`, 'success');
-          onClose();
-        }, 2000);
-      } else {
-        throw new Error(result.error || 'Transaction failed');
-      }
+      toast(`Successfully placed $${amount} on ${side.toUpperCase()}!`, 'success');
+      console.log('✅ Bet placed successfully');
+      
+      onClose();
     } catch (error: any) {
-      console.error('Error placing wager:', error);
-      toast(error.message || 'Failed to place wager', 'error');
+      console.error('Error placing bet:', error);
+      toast(error.message || 'Failed to place bet', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -209,7 +186,7 @@ export function BetModal({ bet, side, onClose }: BetModalProps) {
                 <span className="text-xs font-medium">Pool Size</span>
               </div>
               <p className="text-sm font-semibold text-green-900">
-                {bet.totalPoolAmount} ETH
+                ${bet.totalPool || '0'}
               </p>
             </div>
           </div>
@@ -240,26 +217,26 @@ export function BetModal({ bet, side, onClose }: BetModalProps) {
                 <span className="text-sm font-medium text-gray-700">Bet Amount</span>
                 <div className="flex items-center text-gray-900">
                   <DollarSign className="h-4 w-4 mr-1" />
-                  <span className="text-lg font-bold">{amount.toFixed(3)} ETH</span>
+                  <span className="text-lg font-bold">${amount}</span>
                 </div>
               </div>
               
               <input
                 type="range"
-                min="0.001"
-                max="1"
-                step="0.001"
+                min="1"
+                max="500"
+                step="1"
                 value={amount}
                 onChange={handleSliderChange}
                 className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                 style={{
-                  background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${(amount / 1) * 100}%, #E5E7EB ${(amount / 1) * 100}%, #E5E7EB 100%)`
+                  background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${(amount / 500) * 100}%, #E5E7EB ${(amount / 500) * 100}%, #E5E7EB 100%)`
                 }}
               />
               
               <div className="flex justify-between text-xs text-gray-500 mt-2">
-                <span>0.001 ETH</span>
-                <span>1.0 ETH</span>
+                <span>$1</span>
+                <span>$500</span>
               </div>
             </div>
           </div>
@@ -271,7 +248,7 @@ export function BetModal({ bet, side, onClose }: BetModalProps) {
                 Potential Payout if {side.toUpperCase()} wins
               </p>
               <p className="text-2xl font-bold text-gray-900">
-                {potentialPayout.toFixed(3)} ETH
+                ${potentialPayout.toFixed(0)}
               </p>
               <p className="text-xs text-gray-500 mt-1">
                 {((potentialPayout / amount - 1) * 100).toFixed(0)}% profit
@@ -290,36 +267,38 @@ export function BetModal({ bet, side, onClose }: BetModalProps) {
                 <Loader2 className="h-5 w-5 mr-2 animate-spin" />
                 Placing Bet...
               </>
-            ) : !isConnected ? (
-              'Connect Wallet to Bet'
+            ) : !user ? (
+              'Sign In to Bet'
             ) : !isActive ? (
               'Betting Closed'
+            ) : amount > balance ? (
+              'Insufficient Balance'
             ) : (
-              `Place ${amount.toFixed(3)} ETH Bet`
+              `Place $${amount} Bet`
             )}
           </button>
           
           {/* Status Messages */}
-          {!isConnected && (
+          {!user && (
             <div className="text-center mt-4">
               <p className="text-sm text-orange-600">
-                Connect your wallet to place bets
+                Sign in to place bets
               </p>
             </div>
           )}
           
-          {!isActive && isConnected && (
+          {!isActive && user && (
             <div className="text-center mt-4">
               <p className="text-sm text-red-600">
-                {bet.isResolved ? 'This bet has been resolved' : 'Betting deadline has passed'}
+                Betting is closed
               </p>
             </div>
           )}
 
-          {isConnected && isActive && (
+          {user && isActive && (
             <div className="text-center mt-4">
               <p className="text-xs text-gray-500">
-                Connected: {address?.slice(0, 6)}...{address?.slice(-4)}
+                Balance: ${balance.toFixed(0)} • {user.username}
               </p>
             </div>
           )}

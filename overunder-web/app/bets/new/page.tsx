@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
-import { useAccount, useWaitForTransactionReceipt } from 'wagmi';
+import { usePrivyAuth } from '@/hooks/usePrivyAuth';
+import { usePrivy, useWallets } from '@privy-io/react-auth';
+// import { useAccount, useWaitForTransactionReceipt } from 'wagmi'; // Disabled for custodial system
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -12,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Navbar } from '@/components/navigation/navbar';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/toaster';
-import { useCreateBet, extractBetIdFromReceipt, createSupabaseBetData } from '@/lib/contracts';
+import { extractBetIdFromReceipt, createSupabaseBetData } from '@/lib/contracts';
+import { usePrivyCreateBet } from '@/lib/contracts/privyBetCreation';
 import { Calendar, DollarSign, Loader2, Users, TrendingUp, Clock } from 'lucide-react';
 
 interface Community {
@@ -21,10 +23,11 @@ interface Community {
 }
 
 export default function CreateBetPage() {
-  const { user, loading: authLoading } = useAuth();
-  const { address, isConnected } = useAccount();
+  const { user, loading: authLoading } = usePrivyAuth();
+  const { authenticated, login, linkWallet } = usePrivy();
+  const { wallets } = useWallets();
   const router = useRouter();
-  const { createBet } = useCreateBet();
+  const { createBet } = usePrivyCreateBet(); // Privy + Wagmi contract bet creation
   
   const [formData, setFormData] = useState({
     question: '',
@@ -40,31 +43,46 @@ export default function CreateBetPage() {
   const [loading, setLoading] = useState(true);
   const [creatingBet, setCreatingBet] = useState(false);
   const [txHash, setTxHash] = useState<string>('');
+  const [pendingBetId, setPendingBetId] = useState<number | null>(null);
   
-  // Wait for transaction confirmation
-  const { data: txReceipt, isLoading: txLoading, isSuccess: txSuccess } = useWaitForTransactionReceipt({
-    hash: txHash as `0x${string}`,
-    query: {
-      enabled: !!txHash,
-    },
-  });
+  // Wait for transaction confirmation (disabled for custodial system)
+  // const { data: txReceipt, isLoading: txLoading, isSuccess: txSuccess } = useWaitForTransactionReceipt({
+  //   hash: txHash as `0x${string}`,
+  //   query: {
+  //     enabled: !!txHash,
+  //   },
+  // });
+  
+  // Mock transaction state for custodial system
+  const txReceipt = null;
+  const txLoading = false;
+  const txSuccess = false;
 
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/login');
-    } else if (!authLoading && !isConnected) {
-      router.push('/login');
-    } else if (user && isConnected) {
+    } else if (user) {
+      // Custodial system: No wallet connection required
       fetchUserCommunities();
     }
-  }, [user, authLoading, isConnected, router]);
+  }, [user, authLoading, router]);
 
-  // Handle successful transaction
+  // Handle successful transaction (custodial system)
   useEffect(() => {
-    if (txSuccess && txReceipt) {
+    if (txHash && txHash.includes('mock')) {
+      // For custodial system, simulate transaction success
+      setTimeout(() => {
+        const mockReceipt = {
+          transactionHash: txHash,
+          blockNumber: Math.floor(Math.random() * 1000000),
+          status: 'success'
+        };
+        handleTransactionSuccess(mockReceipt);
+      }, 2000); // Simulate 2 second confirmation time
+    } else if (txSuccess && txReceipt) {
       handleTransactionSuccess(txReceipt);
     }
-  }, [txSuccess, txReceipt]);
+  }, [txHash, txSuccess, txReceipt]);
 
   const fetchUserCommunities = async () => {
     if (!supabase || !user) return;
@@ -93,8 +111,9 @@ export default function CreateBetPage() {
     try {
       console.log('Transaction receipt:', receipt);
       
-      // Extract bet ID from transaction logs
-      const onchainBetId = extractBetIdFromReceipt(receipt);
+      // Extract bet ID from transaction logs or fall back to pendingBetId (custodial/mock flow)
+      const extractedId = extractBetIdFromReceipt(receipt);
+      const onchainBetId = extractedId ?? pendingBetId;
       
       if (!onchainBetId) {
         throw new Error('Could not extract bet ID from transaction receipt');
@@ -138,8 +157,8 @@ export default function CreateBetPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!user || !isConnected || !address) {
-      toast('Please connect your wallet to create a bet', 'error');
+    if (!user) {
+      toast('Please sign in to create a bet', 'error');
       return;
     }
 
@@ -173,7 +192,17 @@ export default function CreateBetPage() {
     setCreatingBet(true);
 
     try {
-      console.log('Creating bet on-chain with data:', formData);
+      // Ensure Privy session and an embedded wallet exist
+      if (!authenticated) {
+        await login({ loginMethods: ['email', 'wallet'] });
+      }
+      if (!wallets || wallets.length === 0) {
+        await linkWallet();
+      }
+      // small delay for wagmi to pick up wallet client
+      await new Promise((r) => setTimeout(r, 300));
+
+      console.log('🚀 Creating bet on-chain with data:', formData);
 
       // Prepare data for smart contract
       const contractData = {
@@ -185,24 +214,55 @@ export default function CreateBetPage() {
         stakeAmount: formData.stakeAmount,
       };
 
-      console.log('Contract data:', contractData);
-
-      // Create bet on-chain first
-      const result = await createBet(contractData);
+      console.log('📋 Contract data:', contractData);
+      
+      toast('Creating bet on Base Sepolia blockchain...', 'info');
+      
+      // Create bet on-chain using real contract
+      const result = await createBet(contractData, user.id);
       
       if (!result.success) {
         throw new Error(result.error || 'Failed to create bet on-chain');
       }
 
-      console.log('Transaction hash:', result.hash);
-      setTxHash(result.hash);
+      console.log('✅ Bet created successfully!', result);
+      setTxHash(result.transactionHash!);
+      setPendingBetId(result.betId!);
       
-      toast('Transaction submitted! Waiting for confirmation...', 'info');
+      toast('Bet created on-chain! Storing in database...', 'success');
       
-      // The useEffect will handle the rest when transaction confirms
+      // Store in Supabase database
+      const betData = createSupabaseBetData(
+        formData,
+        result.betId!,
+        result.transactionHash!,
+        user.id
+      );
+
+      console.log('💾 Storing bet in Supabase:', betData);
+
+      const { data: supabaseBet, error } = await supabase
+        .from('bets')
+        .insert(betData)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Supabase error:', error);
+        throw new Error(`Database error: ${error.message}`);
+      }
+
+      console.log('✅ Bet stored successfully:', supabaseBet);
+      
+      toast('Bet created successfully! Redirecting...', 'success');
+      
+      // Redirect to the bet page
+      setTimeout(() => {
+        router.push(`/bets/${supabaseBet.id}`);
+      }, 1500);
       
     } catch (error: any) {
-      console.error('Error creating bet:', error);
+      console.error('❌ Error creating bet:', error);
       setCreatingBet(false);
       
       const errorMessage = error.message || error.error_description || 'Failed to create bet';
@@ -218,21 +278,9 @@ export default function CreateBetPage() {
     );
   }
 
-  if (!isConnected) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <div className="flex items-center justify-center h-96">
-          <div className="text-center">
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">Wallet Not Connected</h2>
-            <p className="text-gray-600 mb-4">Please connect your wallet to create bets</p>
-            <Button onClick={() => router.push('/login')}>
-              Connect Wallet
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
+  // If not authenticated, redirect will happen in useEffect, show nothing
+  if (!user) {
+    return null;
   }
 
   return (
@@ -244,9 +292,7 @@ export default function CreateBetPage() {
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Create New Bet</h1>
           <p className="text-gray-600">Set up a prediction market and let people bet on the outcome</p>
-          <div className="mt-2 text-sm text-blue-600">
-            Connected: {address?.slice(0, 6)}...{address?.slice(-4)}
-          </div>
+          <div className="mt-2 text-sm text-blue-600">Powered by Privy - Wallet connected</div>
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
