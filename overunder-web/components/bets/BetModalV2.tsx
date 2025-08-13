@@ -33,7 +33,7 @@ export function BetModalV2({ bet, isOpen, onClose }: BetModalV2Props) {
   });
 
   // Real betting hook
-  const { placeBet, isPending, isConfirming, isSuccess, error } = useRealBetting();
+  const { placeBet, isPending, isConfirming, isSuccess, error, reset } = useRealBetting();
 
   const ethBalanceFormatted = ethBalance ? parseFloat(formatEther(ethBalance.value)) : 0;
   const amountNum = parseFloat(amount);
@@ -45,8 +45,8 @@ export function BetModalV2({ bet, isOpen, onClose }: BetModalV2Props) {
   const profit = potentialPayout - amountNum;
   
   // Check if betting is allowed
-  const isActive = bet && !bet.isResolved && bet.timeRemaining > 0;
-  const canBet = user && address && isActive && amountNum > 0 && amountNum <= ethBalanceFormatted && amountNum >= 0.001;
+  const isBetActive = bet && !bet.isResolved && bet.timeRemaining > 0;
+  const canBet = user && address && isBetActive && amountNum > 0 && amountNum <= ethBalanceFormatted && amountNum >= 0.001;
 
   // Quick bet amounts
   const quickAmounts = ['0.001', '0.01', '0.05', '0.1'];
@@ -57,8 +57,10 @@ export function BetModalV2({ bet, isOpen, onClose }: BetModalV2Props) {
       setSelectedSide('yes');
       setAmount('0.01');
       setIsCustomAmount(false);
+      // Reset betting state to allow new bets
+      reset();
     }
-  }, [isOpen]);
+  }, [isOpen, reset]);
 
   // Handle successful bet
   useEffect(() => {
@@ -254,7 +256,7 @@ export function BetModalV2({ bet, isOpen, onClose }: BetModalV2Props) {
           </div>
 
           {/* Warnings */}
-          {!isActive && (
+          {!isBetActive && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
               <div className="flex items-center text-red-700">
                 <AlertTriangle className="h-4 w-4 mr-2" />

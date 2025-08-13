@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { X, AlertCircle, CheckCircle, Clock, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toaster';
+import { usePrivyResolveBet } from '@/lib/contracts/privyResolutionHooks';
 
 interface ResolutionModalProps {
   bet: any;
@@ -15,9 +16,20 @@ interface ResolutionModalProps {
 export function ResolutionModal({ bet, onClose, onResolutionProposed, userId }: ResolutionModalProps) {
   const [selectedOutcome, setSelectedOutcome] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { resolveBet } = usePrivyResolveBet();
+  
+  console.log('🎯 ResolutionModal rendered!', { bet: bet?.id, userId });
 
   const isCreator = bet.creator_id === userId;
-  const canResolve = isCreator && !bet.isResolved && new Date(bet.deadline) < new Date();
+  const canResolve = isCreator && !bet.isResolved;
+  
+  console.log('🔍 ResolutionModal canResolve check:', {
+    isCreator,
+    isResolved: bet.isResolved,
+    canResolve,
+    userId,
+    creatorId: bet.creator_id
+  });
 
   const handlePropose = async () => {
     if (selectedOutcome === null) {
@@ -27,26 +39,48 @@ export function ResolutionModal({ bet, onClose, onResolutionProposed, userId }: 
 
     setIsSubmitting(true);
     try {
-      const response = await fetch('/api/bets/resolve', {
+      // On-chain resolution
+      const res = await resolveBet(parseInt(bet.onchain_bet_id ?? bet.id), selectedOutcome);
+      if (!res.success) {
+        throw new Error(res.error || 'Failed to resolve on-chain');
+      }
+
+      // Update database with resolution
+      const resolvedLabel = bet.options?.[selectedOutcome]?.toLowerCase().includes('yes') ? 'yes'
+        : bet.options?.[selectedOutcome]?.toLowerCase().includes('no') ? 'no'
+        : bet.options?.[selectedOutcome]?.toLowerCase().includes('over') ? 'over'
+        : bet.options?.[selectedOutcome]?.toLowerCase().includes('under') ? 'under'
+        : String(selectedOutcome);
+        
+      console.log('🔄 Updating database with resolution:', {
+        betId: bet.id,
+        selectedOutcome,
+        resolvedLabel,
+        option: bet.options?.[selectedOutcome]
+      });
+      
+      const dbResponse = await fetch('/api/bets/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          betId: bet.id,
-          proposedOutcome: selectedOutcome,
-          userId
+          id: bet.id,
+          updates: { 
+            resolution_status: 'resolved', 
+            resolved_outcome: resolvedLabel,
+            resolution_tx_hash: res.transactionHash 
+          }
         })
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to propose resolution');
-      }
-
-      const data = await response.json();
       
-      // TODO: Execute blockchain transaction with data.transactionData
-      // For now, just show success
-      toast('Resolution proposed! Participants have 24 hours to dispute.', 'success');
+      if (!dbResponse.ok) {
+        const errorData = await dbResponse.json();
+        console.error('❌ Database update failed:', errorData);
+        throw new Error(`Database update failed: ${errorData.error}`);
+      }
+      
+      console.log('✅ Database updated successfully');
+
+      toast('Market resolved on-chain. Winners can now claim.', 'success');
       onResolutionProposed();
       onClose();
     } catch (error: any) {

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePrivyAuth } from '@/hooks/usePrivyAuth';
+import { useCreationFee } from '@/hooks/useCreationFee';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 // import { useAccount, useWaitForTransactionReceipt } from 'wagmi'; // Disabled for custodial system
 import { Input } from '@/components/ui/input';
@@ -11,7 +12,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Navbar } from '@/components/navigation/navbar';
-import { AuthGuard } from '@/components/AuthGuard';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/toaster';
 import { extractBetIdFromReceipt, createSupabaseBetData } from '@/lib/contracts';
@@ -29,6 +29,7 @@ export default function CreateBetPage() {
   const { wallets } = useWallets();
   const router = useRouter();
   const { createBet } = usePrivyCreateBet(); // Privy + Wagmi contract bet creation
+  const { creationFee, creationFeeUSD, loading: feeLoading } = useCreationFee();
   
   const [formData, setFormData] = useState({
     question: '',
@@ -36,7 +37,7 @@ export default function CreateBetPage() {
     bet_type: 'binary' as 'binary' | 'overunder',
     community_id: null as string | null,
     deadline: '',
-    stakeAmount: '0.1', // ETH amount for initial liquidity
+    stakeAmount: '30', // USD amount for initial liquidity (minimum ~$10)
     category: 'Other',
   });
   
@@ -62,18 +63,28 @@ export default function CreateBetPage() {
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/login');
-    } else if (user && !communities.length) {
-      // Only fetch communities if we don't have them yet
+    } else if (user) {
+      // Custodial system: No wallet connection required
       fetchUserCommunities();
     }
-  }, [user?.id, authLoading]);
+  }, [user, authLoading, router]);
 
-  // Handle successful transaction
+  // Handle successful transaction (custodial system)
   useEffect(() => {
-    if (txSuccess && txReceipt) {
+    if (txHash && txHash.includes('mock')) {
+      // For custodial system, simulate transaction success
+      setTimeout(() => {
+        const mockReceipt = {
+          transactionHash: txHash,
+          blockNumber: Math.floor(Math.random() * 1000000),
+          status: 'success'
+        };
+        handleTransactionSuccess(mockReceipt);
+      }, 2000); // Simulate 2 second confirmation time
+    } else if (txSuccess && txReceipt) {
       handleTransactionSuccess(txReceipt);
     }
-  }, [txSuccess, txReceipt]);
+  }, [txHash, txSuccess, txReceipt]);
 
   const fetchUserCommunities = async () => {
     if (!supabase || !user) return;
@@ -92,20 +103,6 @@ export default function CreateBetPage() {
       setCommunities(userCommunities);
     } catch (error) {
       console.error('Error fetching user communities:', error);
-      console.error('Communities error details:', {
-        message: error?.message || 'No message',
-        code: error?.code || 'No code',
-        details: error?.details || 'No details',
-        stack: error?.stack || 'No stack',
-        name: error?.name || 'No name',
-        toString: error?.toString?.() || 'Cannot stringify',
-        keys: Object.keys(error || {}),
-        errorType: typeof error,
-        isError: error instanceof Error,
-        hasSupabase: !!supabase,
-        hasUser: !!user,
-        userId: user?.id
-      });
       toast('Failed to load communities', 'error');
     } finally {
       setLoading(false);
@@ -116,8 +113,9 @@ export default function CreateBetPage() {
     try {
       console.log('Transaction receipt:', receipt);
       
-      // Extract bet ID from transaction logs
-      const onchainBetId = extractBetIdFromReceipt(receipt);
+      // Extract bet ID from transaction logs or fall back to pendingBetId (custodial/mock flow)
+      const extractedId = extractBetIdFromReceipt(receipt);
+      const onchainBetId = extractedId ?? pendingBetId;
       
       if (!onchainBetId) {
         throw new Error('Could not extract bet ID from transaction receipt');
@@ -133,60 +131,15 @@ export default function CreateBetPage() {
 
       console.log('Storing bet in Supabase:', betData);
 
-      // First attempt: insert with on-chain fields
-      let supabaseBet: any | null = null;
-      try {
-        const { data, error } = await supabase
-          .from('bets')
-          .insert(betData)
-          .select()
-          .single();
-        if (error) throw error;
-        supabaseBet = data;
-      } catch (err: any) {
-        // If the schema doesn't yet have onchain fields, retry without them to unblock UX
-        const msg: string = err?.message || '';
-        const code: string | undefined = err?.code;
-        const details: string = err?.details || '';
-        const hint: string = err?.hint || '';
-        const missingOnchainFields =
-          code === 'PGRST204' ||
-          msg.includes('onchain_bet_id') ||
-          msg.includes('onchain_tx_hash') ||
-          details.includes('onchain_bet_id') ||
-          details.includes('onchain_tx_hash') ||
-          hint.includes('onchain_bet_id') ||
-          hint.includes('onchain_tx_hash');
+      const { data: supabaseBet, error } = await supabase
+        .from('bets')
+        .insert(betData)
+        .select()
+        .single();
 
-        if (missingOnchainFields) {
-          console.warn('Missing on-chain columns in bets table. Retrying insert without on-chain fields. Error:', err, JSON.stringify(err));
-          const { onchain_bet_id, onchain_tx_hash, ...fallbackData } = betData as any;
-          const { data, error } = await supabase
-            .from('bets')
-            .insert(fallbackData)
-            .select()
-            .single();
-          if (error) throw error;
-          supabaseBet = data;
-        } else if (code === '42501' || msg.toLowerCase().includes('row-level security') || (err?.message && err.message.includes('row-level security'))) {
-          // RLS violation: call server API with service role
-          console.warn('RLS prevented client insert. Falling back to server API. Error:', err);
-          const res = await fetch('/api/bets', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(betData),
-          });
-          if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            throw new Error(`Server insert failed: ${body?.error?.message || body?.error || res.statusText}`);
-          }
-          const body = await res.json();
-          supabaseBet = body?.data;
-        } else {
-          // Re-throw with best-available info
-          const reason = msg || code || JSON.stringify(err) || 'Unknown error';
-          throw new Error(`Database error: ${reason}`);
-        }
+      if (error) {
+        console.error('Supabase error:', error);
+        throw new Error(`Database error: ${error.message}`);
       }
 
       console.log('Bet stored successfully:', supabaseBet);
@@ -195,9 +148,8 @@ export default function CreateBetPage() {
       router.push(`/bets/${supabaseBet.id}`);
       
     } catch (error: any) {
-      console.error('Error storing bet in Supabase:', error, JSON.stringify(error));
-      const message = error?.message || error?.code || 'Unknown database error';
-      toast(`Bet created on-chain but failed to store: ${message}`, 'error');
+      console.error('Error storing bet in Supabase:', error);
+      toast(`Bet created on-chain but failed to store: ${error.message}`, 'error');
     } finally {
       setCreatingBet(false);
       setTxHash('');
@@ -234,8 +186,8 @@ export default function CreateBetPage() {
       return;
     }
 
-    if (parseFloat(formData.stakeAmount) < 0.01) {
-      toast('Minimum stake amount is 0.01 ETH', 'error');
+    if (parseFloat(formData.stakeAmount) < 10) {
+      toast('Minimum stake amount is $10', 'error');
       return;
     }
 
@@ -254,6 +206,32 @@ export default function CreateBetPage() {
 
       console.log('🚀 Creating bet on-chain with data:', formData);
 
+      // Convert USD stake amount to ETH
+      const ETH_TO_USD = 3000; // Same rate used throughout the app
+      const stakeAmountUSD = parseFloat(formData.stakeAmount);
+      let stakeAmountETH = stakeAmountUSD / ETH_TO_USD;
+      
+      // Ensure we meet the contract's minimum creation fee (dynamically fetched)
+      const MINIMUM_CREATION_FEE_ETH = creationFee;
+      if (stakeAmountETH < MINIMUM_CREATION_FEE_ETH) {
+        console.warn(`⚠️ Stake amount ${stakeAmountETH} ETH is below minimum ${MINIMUM_CREATION_FEE_ETH} ETH (~$${creationFeeUSD.toFixed(0)}). Using minimum.`);
+        stakeAmountETH = MINIMUM_CREATION_FEE_ETH;
+      }
+      
+      // Add a small buffer to avoid precision issues (add 0.0001 ETH ≈ $0.30)
+      stakeAmountETH = stakeAmountETH + 0.0001;
+      
+      const stakeAmountETHString = stakeAmountETH.toFixed(6); // 6 decimal places for precision
+      
+      console.log('💰 Stake amount conversion:', {
+        usd: stakeAmountUSD,
+        eth: stakeAmountETHString,
+        ethNumber: stakeAmountETH,
+        rate: ETH_TO_USD,
+        meetsMinimum: stakeAmountETH >= creationFee,
+        contractMinimum: `${creationFee} ETH (~$${creationFeeUSD.toFixed(0)})`
+      });
+
       // Prepare data for smart contract
       const contractData = {
         question: formData.question.trim(),
@@ -261,7 +239,7 @@ export default function CreateBetPage() {
         bettingOptions: formData.bet_type === 'binary' ? ['Yes', 'No'] : ['Over', 'Under'],
         deadline: deadlineDate,
         category: formData.category,
-        stakeAmount: formData.stakeAmount,
+        stakeAmount: stakeAmountETHString, // Now in ETH, not USD
       };
 
       console.log('📋 Contract data:', contractData);
@@ -269,10 +247,27 @@ export default function CreateBetPage() {
       toast('Creating bet on Base Sepolia blockchain...', 'info');
       
       // Create bet on-chain using real contract
+      console.log('🚀 Calling createBet with:', contractData);
       const result = await createBet(contractData, user.id);
       
+      console.log('📊 Result from createBet:', result);
+      
       if (!result.success) {
+        console.error('❌ Blockchain transaction failed:', result.error);
+        toast('Transaction failed: ' + (result.error || 'Unknown error'), 'error');
         throw new Error(result.error || 'Failed to create bet on-chain');
+      }
+      
+      // Verify we have required data
+      if (!result.transactionHash || !result.betId) {
+        console.error('❌ Missing transaction data:', result);
+        throw new Error('Transaction succeeded but missing required data');
+      }
+      
+      // Verify transaction hash is not a mock (dev mode artifact)
+      if (result.transactionHash.startsWith('0xdevmock')) {
+        console.warn('⚠️ Dev mode mock transaction detected');
+        // In dev mode, we can continue, but in production this would be an error
       }
 
       console.log('✅ Bet created successfully!', result);
@@ -290,29 +285,34 @@ export default function CreateBetPage() {
       );
 
       console.log('💾 Storing bet in Supabase:', betData);
-      console.log('🔍 User object:', user);
-      console.log('🔍 Supabase client:', !!supabase);
-
-      // Use server API for bet creation (more reliable than direct client insert)
-      console.log('📡 Calling server API to store bet...');
-      const response = await fetch('/api/bets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(betData),
+      console.log('🔍 User debug info:', {
+        user,
+        userId: user?.id,
+        authenticated,
+        privyUserId: user?.id
       });
 
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
-        console.error('❌ Server API error:', {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorBody
-        });
-        throw new Error(`Server error: ${errorBody?.error?.message || errorBody?.error || response.statusText}`);
+      const { data: supabaseBet, error } = await supabase
+        .from('bets')
+        .insert(betData)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Supabase insertion failed:', error);
+        console.error('Full error details:', JSON.stringify(error, null, 2));
+        console.error('Attempted to insert:', JSON.stringify(betData, null, 2));
+        
+        // Check if it's an RLS policy error
+        if (error.message?.includes('row-level security') || error.message?.includes('policy')) {
+          console.error('⚠️ This looks like an RLS policy error. The bet was created on-chain but not saved to database.');
+          console.error('You may need to run the RLS fix SQL in your Supabase dashboard.');
+        }
+        
+        throw new Error(`Database error: ${error.message}`);
       }
 
-      const { data: supabaseBet } = await response.json();
-      console.log('✅ Bet stored successfully via server API:', supabaseBet);
+      console.log('✅ Bet stored successfully:', supabaseBet);
       
       toast('Bet created successfully! Redirecting...', 'success');
       
@@ -344,20 +344,19 @@ export default function CreateBetPage() {
   }
 
   return (
-    <AuthGuard>
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
+    <div className="min-h-screen bg-gray-50">
+      <Navbar />
       
-      <main className="max-w-2xl md:max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="mb-6 md:mb-8">
-          <h1 className="text-2xl md:text-4xl font-bold text-gray-900 mb-2">Create New Bet</h1>
-          <p className="text-sm md:text-base text-gray-600">Set up a prediction market and let people bet on the outcome</p>
-          <div className="mt-2 text-xs md:text-sm text-blue-600">Powered by Privy - Wallet connected</div>
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">Create New Bet</h1>
+          <p className="text-gray-600">Set up a prediction market and let people bet on the outcome</p>
+          <div className="mt-2 text-sm text-blue-600">Powered by Privy - Wallet connected</div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
-          <form onSubmit={handleSubmit} className="space-y-6 md:space-y-8">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+          <form onSubmit={handleSubmit} className="space-y-8">
             {/* Bet Question */}
             <div className="space-y-2">
               <Label htmlFor="question" className="text-base font-semibold text-gray-900">
@@ -520,20 +519,20 @@ export default function CreateBetPage() {
             <div className="space-y-2">
               <Label htmlFor="stake" className="text-base font-semibold text-gray-900">
                 <DollarSign className="inline h-4 w-4 mr-1" />
-                Initial Stake (ETH)
+                Initial Stake (USD)
               </Label>
               <div className="relative">
                 <Input
                   id="stake"
                   type="number"
-                  step="0.01"
-                  min="0.01"
+                  step="10"
+                  min="10"
                   value={formData.stakeAmount}
                   onChange={(e) => setFormData({ ...formData, stakeAmount: e.target.value })}
                   className="pl-8"
                   required
                 />
-                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">Ξ</span>
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">$</span>
               </div>
               <p className="text-sm text-gray-500">
                 Your initial stake will be distributed equally across all betting options for balanced liquidity.
@@ -570,15 +569,14 @@ export default function CreateBetPage() {
         <div className="mt-8 bg-blue-50 border border-blue-200 rounded-2xl p-6">
           <h3 className="text-lg font-semibold text-blue-900 mb-3">How it works</h3>
           <div className="space-y-2 text-sm text-blue-800">
-            <p>• Your bet is created on the Ethereum blockchain for transparency</p>
+            <p>• Your bet is created on the Base blockchain for transparency</p>
             <p>• Your initial stake provides balanced liquidity across all options</p>
-            <p>• People buy "Yes/No" or "Over/Under" shares with ETH</p>
+            <p>• People buy "Yes/No" or "Over/Under" shares with USD</p>
             <p>• When resolved, winning shares get the entire pool</p>
             <p>• All transactions are recorded on-chain and in our database</p>
           </div>
         </div>
       </main>
-      </div>
-    </AuthGuard>
+    </div>
   );
 } 

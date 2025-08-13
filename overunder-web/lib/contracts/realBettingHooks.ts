@@ -15,7 +15,7 @@ const FINAL_CONTRACT_ADDRESS = CONTRACT_ADDRESS || (process.env.NEXT_PUBLIC_CONT
  * Hook for placing real on-chain bets with ETH
  */
 export function useRealBetting() {
-  const { writeContract, data: hash, isPending, error } = useWriteContract();
+  const { writeContract, data: hash, isPending, error, reset } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
@@ -66,6 +66,7 @@ export function useRealBetting() {
     isConfirming,
     isSuccess,
     error,
+    reset,
   };
 }
 

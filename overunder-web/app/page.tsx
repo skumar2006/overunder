@@ -225,7 +225,7 @@ function BetList({
   return (
     <div className="space-y-4 md:space-y-6">
       {betIds.slice(0, 10).map((betId) => (
-        <BetItem key={betId} betId={betId} onBetClick={onBetClick} />
+        <BetItem key={betId} betId={betId} selectedTab={selectedTab} onBetClick={onBetClick} />
       ))}
 
       {betIds.length > 10 && (
@@ -240,9 +240,11 @@ function BetList({
 // Individual bet item component
 function BetItem({
   betId,
+  selectedTab,
   onBetClick
 }: {
   betId: number,
+  selectedTab: string,
   onBetClick: (bet: BetData, side: 'yes' | 'no') => void
 }) {
   const { data: bet, loading, error } = useGetBet(betId);
@@ -281,55 +283,64 @@ function BetItem({
   const status = getBetStatus(bet.deadline);
   const timeRemaining = formatTimeRemaining(bet.deadline);
 
+  // Filter bets based on selected tab and status
+  const shouldHide = 
+    (selectedTab === 'live-bets' && (status === 'expired' || bet.isResolved)) ||
+    (selectedTab === 'trending' && (status === 'expired' || bet.isResolved)) ||
+    (selectedTab === 'resolved' && !bet.isResolved);
+
+  if (shouldHide) {
+    return null;
+  }
+
+  // We need to find the database UUID for this onchain bet ID
+  // For now, let's log what we're trying to link to
+  console.log('🔗 Bet Link Debug:', {
+    onchainBetId: bet.id,
+    betData: bet,
+    linkHref: `/bets/${bet.id}`
+  });
+
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 md:p-6 hover:shadow-md transition-shadow w-full">
-      <div className="space-y-4">
-        <div>
-          <h3 className="font-semibold text-gray-900 mb-2 text-base md:text-lg leading-tight">{bet.question}</h3>
-          {bet.description && (
-            <p className="text-gray-600 text-sm mb-3">{bet.description}</p>
-          )}
-        </div>
+    <Link href={`/bets/${bet.id}`}>
+      <div className="bg-white border border-gray-200 rounded-lg p-4 md:p-6 hover:shadow-md transition-shadow w-full cursor-pointer">
+        <div className="space-y-4">
+          <div>
+            <h3 className="font-semibold text-gray-900 mb-2 text-base md:text-lg leading-tight">{bet.question}</h3>
+            {bet.description && (
+              <p className="text-gray-600 text-sm mb-3">{bet.description}</p>
+            )}
+          </div>
 
-        <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
-          <span className="flex items-center">
-            <Clock className="h-4 w-4 mr-1" />
-            {status === 'active' ? timeRemaining : status === 'resolved' ? 'Resolved' : 'Expired'}
-          </span>
-          <span className="flex items-center">
-            <TrendingUp className="h-4 w-4 mr-1" />
-            ${bet.totalPool} Pool
-          </span>
-        </div>
+          <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
+            <span className="flex items-center">
+              <Clock className="h-4 w-4 mr-1" />
+              {status === 'active' ? timeRemaining : status === 'resolved' ? 'RESOLVED' : 'Expired'}
+            </span>
+            <span className="flex items-center">
+              <TrendingUp className="h-4 w-4 mr-1" />
+              ${bet.totalPool} Pool
+            </span>
+            {status === 'resolved' && bet.resolved_outcome && (
+              <span className="flex items-center bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-medium">
+                Winner: {bet.resolved_outcome.toUpperCase()}
+              </span>
+            )}
+          </div>
 
-        <div className="flex flex-col sm:flex-row gap-3">
-          {bet.options.map((option, index) => (
-            <button
-              key={index}
-              onClick={() => {
-                console.log(`🎯 Clicking ${option} for bet ${bet.id}`);
-                onBetClick(bet, index === 0 ? 'yes' : 'no');
-              }}
-              className={`flex-1 px-4 py-3 rounded-lg font-medium text-sm transition-colors ${
-                index === 0
-                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                  : 'bg-red-100 text-red-700 hover:bg-red-200'
-              } ${status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''}`}
-              disabled={status !== 'active'}
-            >
-              <div className="text-center">
-                <div className="font-semibold">{option}</div>
-                {bet.odds && (
-                  <div className="text-xs opacity-75 mt-1">
-                    {bet.odds[index].toFixed(1)}%
-                  </div>
-                )}
-              </div>
-            </button>
-          ))}
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            {bet.options.map((option, index) => (
+              <span key={index} className={`px-3 py-1 rounded-full text-xs font-medium ${
+                index === 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+              }`}>
+                {option}
+                {bet.odds && ` (${bet.odds[index].toFixed(1)}%)`}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
 

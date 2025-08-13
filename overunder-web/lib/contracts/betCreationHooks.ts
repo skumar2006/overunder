@@ -7,7 +7,7 @@ import { walletService } from '@/lib/walletService';
 import contractData from './OverunderUpgradeable.json';
 import { getEnvironmentConfig, getContractConfig, NETWORKS } from './config';
 
-const FRESH_ABI = contractData.abi;
+const FRESH_ABI = contractData.abi as any;
 
 export interface CreateBetParams {
   question: string;

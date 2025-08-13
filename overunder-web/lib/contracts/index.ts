@@ -55,23 +55,8 @@ export {
 // Custodial Bet Creation Hook
 export { useCreateBet } from './betCreationHooks';
 
-// Dispute System Hooks
-export {
-  useProposeBetResolution,
-  useInitiateDispute,
-  useVoteOnDispute,
-  useResolveDispute,
-  useGetDisputeStatus,
-  useCanVote,
-  useGetVoteWeight,
-  useDisputeConstants,
-} from './disputeHooks';
-
-// Real Betting Hooks
-export {
-  useRealBetting,
-  useProvideLiquidity,
-} from './realBettingHooks';
+// Privy-integrated resolution/claim hooks
+export { usePrivyResolveBet, usePrivyClaimWinnings } from './privyResolutionHooks';
 
 // React Hooks - Custodial System (wagmi-based hooks temporarily disabled)
 // TODO: Implement custodial versions of these hooks

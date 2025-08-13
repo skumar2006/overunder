@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabase';
 import contractData from './OverunderUpgradeable.json';
 import { getEnvironmentConfig, getContractConfig } from './config';
 
-const FRESH_ABI = contractData.abi;
+const FRESH_ABI = contractData.abi as any;
 
 export interface CreateBetParams {
   question: string;
@@ -82,9 +82,13 @@ export function usePrivyCreateBet() {
       // Convert stake amount to wei
       const stakeAmountWei = parseEther(params.stakeAmount);
 
-      console.log('💰 Stake amount:', {
-        eth: params.stakeAmount,
-        wei: stakeAmountWei.toString()
+      console.log('💰 Stake amount debug:', {
+        ethString: params.stakeAmount,
+        ethNumber: parseFloat(params.stakeAmount),
+        wei: stakeAmountWei.toString(),
+        weiNumber: Number(stakeAmountWei),
+        requiredWei: '3300000000000000',
+        meetsRequirement: Number(stakeAmountWei) >= 3300000000000000
       });
 
       let txHash: `0x${string}` | undefined;
@@ -92,6 +96,11 @@ export function usePrivyCreateBet() {
 
       // Optional dev mode: if no funds, short-circuit and simulate success
       const devNoFunds = process.env.NEXT_PUBLIC_DEV_NO_FUNDS === 'true';
+      
+      console.log('🔧 Dev mode check:', {
+        devNoFunds,
+        envVar: process.env.NEXT_PUBLIC_DEV_NO_FUNDS
+      });
 
       if (walletClient && publicClient) {
         // Optional balance check

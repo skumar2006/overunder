@@ -4,8 +4,13 @@ import { useState, useEffect, useMemo } from 'react';
 import { ethers } from 'ethers';
 // Import fresh ABI and network configuration
 import contractData from './OverunderUpgradeable.json';
-import { NETWORKS, getContractConfig, getEnvironmentConfig } from './config';
-const FRESH_ABI = contractData.abi;
+import { getEnvironmentConfig, getContractConfig, NETWORKS } from './config';
+const FRESH_ABI = contractData.abi as any;
+
+// Get environment config
+const { defaultChainId } = getEnvironmentConfig();
+const contractConfig = getContractConfig(defaultChainId);
+const SELECTED_NETWORK = NETWORKS[defaultChainId === 31337 ? 'localhost' : 'baseSepolia'];
 
 // Types
 export interface ContractCallResult<T> {
@@ -35,19 +40,9 @@ export interface BetData {
   isResolved: boolean;
 }
 
-// Resolve network and contract configuration
-const { defaultChainId } = getEnvironmentConfig();
-const contractConfig = getContractConfig(defaultChainId);
-const NETWORK_BY_CHAIN_ID = {
-  31337: NETWORKS.localhost,
-  84532: NETWORKS.baseSepolia,
-  8453: NETWORKS.baseMainnet,
-} as const;
-const selectedNetwork = NETWORK_BY_CHAIN_ID[defaultChainId];
-
-// Contract configuration from resolved network
+// Contract configuration from network config
 const CONTRACT_ADDRESS = contractConfig.overunderAddress;
-const RPC_URL = selectedNetwork.rpcUrl;
+const RPC_URL = SELECTED_NETWORK.rpcUrl;
 
 // Create ethers provider for read-only operations
 const provider = new ethers.JsonRpcProvider(RPC_URL);
@@ -55,7 +50,16 @@ const provider = new ethers.JsonRpcProvider(RPC_URL);
 // Contract instance for reading
 const contract = new ethers.Contract(CONTRACT_ADDRESS, FRESH_ABI, provider);
 
-
+// Debug contract setup
+console.log('🔧 Contract setup:', {
+  network: SELECTED_NETWORK.name,
+  chainId: defaultChainId,
+  address: CONTRACT_ADDRESS,
+  rpcUrl: RPC_URL,
+  explorer: SELECTED_NETWORK.blockExplorer,
+  abiLoaded: !!FRESH_ABI,
+  abiLength: FRESH_ABI?.length
+});
 
 // Utility functions
 export function formatTimeRemaining(deadline: Date | string | number): string {
@@ -120,11 +124,45 @@ export function useGetAllBets(): ContractCallResult<number[]> {
         setLoading(true);
         setError(undefined);
         
+        console.log('📊 Fetching bet IDs from contract...');
+        console.log('📊 Contract instance:', contract);
+        console.log('📊 Contract address:', await contract.getAddress());
+        
+        // Test if contract is responsive
+        try {
+          const version = await contract.getVersion();
+          console.log('📊 Contract version:', version.toString());
+        } catch (versionErr) {
+          console.log('📊 Could not get version:', versionErr);
+        }
+        
+        // Call the actual contract
+        console.log('📊 Calling getAllBets()...');
         const result = await contract.getAllBets();
+        console.log('📊 Raw getAllBets result:', result);
+        
         const betIds = result.map((id: bigint) => Number(id));
+        console.log('📊 Parsed bet IDs:', betIds);
         setData(betIds);
       } catch (err) {
-        setError('Failed to connect to blockchain');
+        console.error('❌ Error fetching bets from contract:', err);
+        console.error('Network:', CURRENT_NETWORK.name);
+        console.error('RPC URL:', RPC_URL);
+        console.error('Contract Address:', CONTRACT_ADDRESS);
+        
+        // Provide helpful error messages based on network
+        let errorMessage = 'Failed to connect to blockchain';
+        if (CURRENT_NETWORK.name === 'Hardhat Local') {
+          errorMessage = 'Local Hardhat node not running. Start with: npx hardhat node';
+        } else if (CURRENT_NETWORK.name === 'Base Sepolia') {
+          errorMessage = 'Unable to connect to Base Sepolia testnet. Check internet connection.';
+        }
+        
+        // Fallback to mock data if contract call fails
+        console.log('📊 Falling back to mock data...');
+        const mockBetIds = [1, 2, 3];
+        setData(mockBetIds);
+        setError(errorMessage);
       } finally {
         setLoading(false);
       }
@@ -165,8 +203,12 @@ export function useGetBet(betId: number | undefined): ContractCallResult<BetData
         let odds: number[] = [50, 50]; // Default 50/50
         try {
           const contractOdds = await contract.getBetOdds(betId);
-          // Convert from basis points to percentages (5000 basis points = 50%)
+          // Convert from basis points (10000 = 100%) to percentages
           odds = contractOdds.map((odd: bigint) => Number(odd) / 100);
+          console.log(`📊 Odds conversion for bet ${betId}:`, {
+            rawOdds: contractOdds.map((odd: bigint) => Number(odd)),
+            convertedOdds: odds
+          });
         } catch (oddsErr) {
           console.log(`ℹ️ Could not get odds for bet ${betId}, using defaults`);
         }
@@ -187,7 +229,20 @@ export function useGetBet(betId: number | undefined): ContractCallResult<BetData
         const deadline = new Date(Number(contractBet.deadlineTimestamp) * 1000);
         const timeRemainingMs = deadline.getTime() - Date.now();
         const timeRemaining = Math.max(0, Math.floor(timeRemainingMs / 1000));
-        const totalPool = (parseFloat(yesPool) + parseFloat(noPool)).toString();
+        
+        // Convert ETH pool to USD for display
+        const ETH_TO_USD = 3000;
+        const totalPoolETH = parseFloat(yesPool) + parseFloat(noPool);
+        const totalPoolUSD = totalPoolETH * ETH_TO_USD;
+        const totalPool = totalPoolUSD.toFixed(0); // Round to nearest dollar
+        
+        console.log(`💰 Pool conversion for bet ${betId}:`, {
+          yesPoolETH: yesPool,
+          noPoolETH: noPool,
+          totalPoolETH,
+          totalPoolUSD,
+          displayValue: totalPool
+        });
         
         const betData: BetData = {
           id: betId,
@@ -213,7 +268,68 @@ export function useGetBet(betId: number | undefined): ContractCallResult<BetData
         setData(betData);
       } catch (err) {
         console.error('Error fetching bet from contract:', err);
-        setError('Failed to fetch bet from contract');
+        
+        // Fallback to mock data if contract call fails
+        console.log(`📊 Falling back to mock data for bet ${betId}...`);
+        
+        const deadline = new Date(Date.now() + (betId * 12 + 24) * 60 * 60 * 1000);
+        const mockBets = [
+          {
+            question: "Will Bitcoin reach $100k by end of year?",
+            description: "A prediction market about Bitcoin's price reaching $100,000 USD by December 31st.",
+            category: "Crypto",
+            yesPool: "0.75",
+            noPool: "0.25",
+            totalPool: "3000", // $3000 USD (1.0 ETH * $3000)
+            odds: [25, 75]
+          },
+          {
+            question: "Will it rain tomorrow in San Francisco?",
+            description: "Weather prediction for San Francisco tomorrow based on current forecasts.",
+            category: "Weather", 
+            yesPool: "0.12",
+            noPool: "0.18",
+            totalPool: "900", // $900 USD (0.3 ETH * $3000)
+            odds: [40, 60]
+          },
+          {
+            question: "Will the Lakers win their next game?",
+            description: "Prediction about the LA Lakers winning their upcoming basketball game.",
+            category: "Sports",
+            yesPool: "0.4",
+            noPool: "0.6", 
+            totalPool: "3000", // $3000 USD (1.0 ETH * $3000)
+            odds: [40, 60]
+          }
+        ];
+        
+        const betIndex = ((betId - 1) % mockBets.length);
+        const betTemplate = mockBets[betIndex];
+        const timeRemainingMs = deadline.getTime() - Date.now();
+        const timeRemaining = Math.max(0, Math.floor(timeRemainingMs / 1000));
+        
+        const mockBetData: BetData = {
+          id: betId,
+          betId: betId,
+          question: betTemplate.question,
+          description: betTemplate.description,
+          creator: '0x' + Math.random().toString(16).substr(2, 40),
+          options: ['YES', 'NO'],
+          deadline: deadline,
+          timeRemaining: timeRemaining,
+          totalPayout: betTemplate.totalPool,
+          totalPoolAmount: betTemplate.totalPool,
+          status: timeRemaining > 0 ? 'active' : 'expired',
+          category: betTemplate.category,
+          yesPool: betTemplate.yesPool,
+          noPool: betTemplate.noPool,
+          totalPool: betTemplate.totalPool,
+          odds: betTemplate.odds,
+          isResolved: false
+        };
+        
+        setData(mockBetData);
+        setError('Using mock data - contract call failed');
       } finally {
         setLoading(false);
       }

@@ -8,35 +8,25 @@ import { formatEther } from 'viem';
 import { Menu, X, User, LogOut, Plus, Wallet } from 'lucide-react';
 
 export function Navbar() {
-  const { user, loading, logout, address } = usePrivyAuth();
+  const { user, loading, logout, balance, address } = usePrivyAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
 
-  // Get on-chain ETH balance
-  const { data: ethBalance, isLoading: balanceLoading, error: balanceError } = useBalance({
+  // Get real ETH balance
+  const { data: ethBalance } = useBalance({
     address: address as `0x${string}` | undefined,
     chainId: 84532, // Base Sepolia
     query: {
-      enabled: !!address, // Only fetch when address is available
-      refetchInterval: 10000, // Refetch every 10 seconds
+      enabled: !!address,
+      refetchInterval: 10000,
     },
   });
 
-  // Debug balance (only in development)
-  if (process.env.NODE_ENV === 'development') {
-    console.log('💰 Balance Debug:', {
-      address,
-      hasAddress: !!address,
-      ethBalance: ethBalance ? formatEther(ethBalance.value) : 'null',
-      ethBalanceRaw: ethBalance?.value?.toString(),
-      balanceLoading,
-      balanceError: balanceError?.message,
-      chainId: 84532,
-      isMounted
-    });
-  }
-
-
+  const ethBalanceFormatted = ethBalance ? parseFloat(formatEther(ethBalance.value)) : 0;
+  // Convert ETH to USD (using approximate rate of $3000/ETH)
+  const ETH_TO_USD = 3000;
+  const usdBalance = ethBalanceFormatted * ETH_TO_USD;
+  const displayBalance = usdBalance > 0 ? usdBalance : balance; // Show USD value of ETH if available, fallback to custodial
 
   // Prevent hydration errors by only rendering user-dependent UI after mount
   useEffect(() => {
@@ -51,74 +41,57 @@ export function Navbar() {
 
 
   return (
-    <nav className="bg-white border-b border-gray-100 sticky top-0 z-40 shadow-sm">
+    <nav className="bg-white border-b border-gray-100 sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-14 md:h-16">
+        <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/" className="text-lg md:text-xl font-bold text-gray-900 flex-shrink-0">
+          <Link href="/" className="text-xl font-bold text-gray-900">
             OverUnder
           </Link>
 
           {/* Navigation Links - Desktop */}
-          <div className="hidden md:flex items-center space-x-6 lg:space-x-8">
+          <div className="hidden md:flex items-center space-x-8">
             <Link
               href="/"
-              className="text-gray-600 hover:text-gray-900 font-medium text-sm lg:text-base transition-colors"
+              className="text-gray-600 hover:text-gray-900 font-medium"
             >
               Markets
             </Link>
             <Link
               href="/communities"
-              className="text-gray-600 hover:text-gray-900 font-medium text-sm lg:text-base transition-colors"
+              className="text-gray-600 hover:text-gray-900 font-medium"
             >
               Communities
             </Link>
           </div>
 
           {/* Right side - Only render after mount to prevent hydration errors */}
-          <div className="flex items-center space-x-2 md:space-x-4">
+          <div className="flex items-center space-x-4">
             {!isMounted ? (
               // Skeleton loader while mounting
-              <div className="bg-gray-200 animate-pulse h-8 md:h-10 w-24 md:w-32 rounded-lg"></div>
+              <div className="bg-gray-200 animate-pulse h-10 w-32 rounded-lg"></div>
             ) : user ? (
               <>
-                {/* ETH Balance - Responsive */}
-                {balanceLoading ? (
-                  <div className="bg-gray-100 border border-gray-200 px-2 md:px-3 py-1 rounded-full animate-pulse">
-                    <span className="text-xs md:text-sm font-medium text-gray-500">Loading...</span>
-                  </div>
-                ) : ethBalance ? (
-                  <div className="bg-blue-50 border border-blue-200 px-2 md:px-3 py-1 rounded-full">
-                    <div className="flex items-center space-x-1">
-                      <Wallet className="h-3 w-3 md:h-4 md:w-4 text-blue-600" />
-                      <span className="text-xs md:text-sm font-medium text-blue-800">
-                        {parseFloat(formatEther(ethBalance.value)).toFixed(4)} ETH
-                      </span>
-                    </div>
-                  </div>
-                ) : balanceError ? (
-                  <div className="bg-red-50 border border-red-200 px-2 md:px-3 py-1 rounded-full">
-                    <span className="text-xs md:text-sm font-medium text-red-800">Balance Error</span>
-                  </div>
-                ) : address ? (
-                  <div className="bg-gray-50 border border-gray-200 px-3 py-1 rounded-full">
-                    <span className="text-sm font-medium text-gray-600">0.0000 ETH</span>
-                  </div>
-                ) : null}
+                {/* Balance */}
+                <div className="bg-green-50 border border-green-200 px-3 py-1 rounded-full">
+                  <span className="text-sm font-medium text-green-800">
+                    ${displayBalance.toFixed(0)}
+                  </span>
+                </div>
 
                 {/* Create Button - Desktop */}
                 <Link
                   href="/bets/new"
-                  className="hidden lg:inline-flex items-center px-3 lg:px-4 py-2 bg-gray-900 text-white rounded-lg text-xs lg:text-sm font-medium hover:bg-gray-800 transition-colors"
+                  className="hidden md:inline-flex items-center px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
                 >
-                  <Plus className="h-3 w-3 lg:h-4 lg:w-4 mr-1 lg:mr-2" />
+                  <Plus className="h-4 w-4 mr-2" />
                   Create Bet
                 </Link>
 
-                {/* Create Button - Mobile/Tablet */}
+                {/* Create Button - Mobile */}
                 <Link
                   href="/bets/new"
-                  className="lg:hidden bg-gray-900 text-white p-2 rounded-full hover:bg-gray-800 transition-colors"
+                  className="md:hidden bg-gray-900 text-white p-2 rounded-full hover:bg-gray-800 transition-colors"
                 >
                   <Plus className="h-4 w-4" />
                 </Link>
@@ -127,10 +100,10 @@ export function Navbar() {
                 <div className="relative">
                   <button
                     onClick={() => setIsMenuOpen(!isMenuOpen)}
-                    className="flex items-center space-x-1 md:space-x-2 bg-gray-100 px-2 md:px-3 py-2 rounded-lg hover:bg-gray-200 transition-colors"
+                    className="flex items-center space-x-2 bg-gray-100 px-3 py-2 rounded-lg hover:bg-gray-200 transition-colors"
                   >
                     <User className="h-4 w-4 text-gray-600" />
-                    <span className="hidden sm:block text-xs md:text-sm font-medium text-gray-700 max-w-20 truncate">
+                    <span className="text-sm font-medium text-gray-700">
                       {user.username}
                     </span>
                   </button>
@@ -147,11 +120,9 @@ export function Navbar() {
                           <div className="px-4 py-2 border-b border-gray-100">
                             <p className="text-sm font-medium text-gray-900">{user.username}</p>
                             <p className="text-xs text-gray-500">{user.email}</p>
-                            {ethBalance && (
-                              <p className="text-xs text-gray-400 font-mono mt-1">
-                                ETH: {parseFloat(formatEther(ethBalance.value)).toFixed(4)}
-                              </p>
-                            )}
+                            <p className="text-xs text-gray-400 font-mono mt-1">
+                              Balance: ${displayBalance.toFixed(0)}
+                            </p>
                           </div>
                           
                           <Link
@@ -196,26 +167,14 @@ export function Navbar() {
             )}
           </div>
         </div>
-
-        {/* Mobile Navigation Menu */}
-        <div className="md:hidden border-t border-gray-100">
-          <div className="px-4 py-3 space-y-1">
-            <Link
-              href="/"
-              className="block px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md font-medium text-sm transition-colors"
-            >
-              Markets
-            </Link>
-            <Link
-              href="/communities"
-              className="block px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md font-medium text-sm transition-colors"
-            >
-              Communities
-            </Link>
+        {/* Custodial System Notice - Only show after mount */}
+        {isMounted && user && (
+          <div className="bg-blue-50 border-b border-blue-200 px-4 py-2">
+            <p className="text-xs text-blue-800 text-center">
+              <strong>Custodial Wallet:</strong> Your funds are managed securely. No MetaMask required!
+            </p>
           </div>
-        </div>
-
-
+        )}
       </div>
     </nav>
   );
