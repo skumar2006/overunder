@@ -2,50 +2,43 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useAccount, useConnect, useDisconnect } from 'wagmi';
-import { useAuth } from '@/contexts/AuthContext';
+import { usePrivyAuth } from '@/hooks/usePrivyAuth';
+import { useBalance } from 'wagmi';
+import { formatEther } from 'viem';
 import { Menu, X, User, LogOut, Plus, Wallet } from 'lucide-react';
 
 export function Navbar() {
-  const { user, loading } = useAuth();
-  const { address, isConnected } = useAccount();
-  const { connect, connectors } = useConnect();
-  const { disconnect } = useDisconnect();
-  const [balance, setBalance] = useState(10000); // Default Hardhat balance
+  const { user, loading, logout, balance, address } = usePrivyAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
 
-  // Prevent hydration errors by only rendering wallet-dependent UI after mount
+  // Get real ETH balance
+  const { data: ethBalance } = useBalance({
+    address: address as `0x${string}` | undefined,
+    chainId: 84532, // Base Sepolia
+    query: {
+      enabled: !!address,
+      refetchInterval: 10000,
+    },
+  });
+
+  const ethBalanceFormatted = ethBalance ? parseFloat(formatEther(ethBalance.value)) : 0;
+  // Convert ETH to USD (using approximate rate of $3000/ETH)
+  const ETH_TO_USD = 3000;
+  const usdBalance = ethBalanceFormatted * ETH_TO_USD;
+  const displayBalance = usdBalance > 0 ? usdBalance : balance; // Show USD value of ETH if available, fallback to custodial
+
+  // Prevent hydration errors by only rendering user-dependent UI after mount
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  useEffect(() => {
-    if (isConnected && address) {
-      // In a real app, you'd fetch the actual balance here
-      setBalance(10000); // Hardhat test account has 10k ETH
-    }
-  }, [isConnected, address]);
-
-  const handleConnect = () => {
-    const injectedConnector = connectors.find(
-      (connector) => connector.name === 'MetaMask' || connector.name === 'Injected'
-    );
-    if (injectedConnector) {
-      connect({ connector: injectedConnector });
-    } else if (connectors[0]) {
-      connect({ connector: connectors[0] });
-    }
-  };
-
-  const handleDisconnect = () => {
-    disconnect();
+  const handleSignOut = async () => {
+    await logout();
     setIsMenuOpen(false);
   };
 
-  const shortenAddress = (addr: string) => {
-    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-  };
+
 
   return (
     <nav className="bg-white border-b border-gray-100 sticky top-0 z-40">
@@ -77,12 +70,12 @@ export function Navbar() {
             {!isMounted ? (
               // Skeleton loader while mounting
               <div className="bg-gray-200 animate-pulse h-10 w-32 rounded-lg"></div>
-            ) : isConnected && address ? (
+            ) : user ? (
               <>
                 {/* Balance */}
                 <div className="bg-green-50 border border-green-200 px-3 py-1 rounded-full">
                   <span className="text-sm font-medium text-green-800">
-                    {balance.toFixed(0)} ETH
+                    ${displayBalance.toFixed(0)}
                   </span>
                 </div>
 
@@ -109,9 +102,9 @@ export function Navbar() {
                     onClick={() => setIsMenuOpen(!isMenuOpen)}
                     className="flex items-center space-x-2 bg-gray-100 px-3 py-2 rounded-lg hover:bg-gray-200 transition-colors"
                   >
-                    <Wallet className="h-4 w-4 text-gray-600" />
+                    <User className="h-4 w-4 text-gray-600" />
                     <span className="text-sm font-medium text-gray-700">
-                      {shortenAddress(address)}
+                      {user.username}
                     </span>
                   </button>
 
@@ -125,12 +118,15 @@ export function Navbar() {
                       <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-100 z-20">
                         <div className="py-2">
                           <div className="px-4 py-2 border-b border-gray-100">
-                            <p className="text-sm font-medium text-gray-900">Wallet Connected</p>
-                            <p className="text-xs text-gray-500 font-mono">{shortenAddress(address)}</p>
+                            <p className="text-sm font-medium text-gray-900">{user.username}</p>
+                            <p className="text-xs text-gray-500">{user.email}</p>
+                            <p className="text-xs text-gray-400 font-mono mt-1">
+                              Balance: ${displayBalance.toFixed(0)}
+                            </p>
                           </div>
                           
                           <Link
-                            href={`/profile/${address}`}
+                            href="/profile"
                             className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                             onClick={() => setIsMenuOpen(false)}
                           >
@@ -148,11 +144,11 @@ export function Navbar() {
                           </Link>
                           
                           <button
-                            onClick={handleDisconnect}
+                            onClick={handleSignOut}
                             className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                           >
                             <LogOut className="h-4 w-4 mr-2" />
-                            Disconnect
+                            Sign Out
                           </button>
                         </div>
                       </div>
@@ -161,22 +157,21 @@ export function Navbar() {
                 </div>
               </>
             ) : (
-              <button
-                onClick={handleConnect}
-                disabled={loading}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
+              <Link
+                href="/login"
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center space-x-2"
               >
-                <Wallet className="h-4 w-4" />
-                <span>{loading ? 'Connecting...' : 'Connect Wallet'}</span>
-              </button>
+                <User className="h-4 w-4" />
+                <span>Sign In</span>
+              </Link>
             )}
           </div>
         </div>
-        {/* Network Warning - Only show after mount */}
-        {isMounted && isConnected && (
-          <div className="bg-yellow-50 border-b border-yellow-200 px-4 py-2">
-            <p className="text-xs text-yellow-800 text-center">
-              <strong>Development Mode:</strong> Connected to localhost:8545 (Chain ID: 31337)
+        {/* Custodial System Notice - Only show after mount */}
+        {isMounted && user && (
+          <div className="bg-blue-50 border-b border-blue-200 px-4 py-2">
+            <p className="text-xs text-blue-800 text-center">
+              <strong>Custodial Wallet:</strong> Your funds are managed securely. No MetaMask required!
             </p>
           </div>
         )}

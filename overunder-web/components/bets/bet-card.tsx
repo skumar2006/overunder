@@ -37,37 +37,37 @@ export function BetCard({ bet, onBetClick }: BetCardProps) {
   ];
 
   return (
-    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+    <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
       {/* Time Indicator */}
-      <div className="flex justify-end mb-4">
-        <div className="flex items-center text-gray-400 text-sm">
-          <Clock className="h-4 w-4 mr-1" />
+      <div className="flex justify-end mb-3 md:mb-4">
+        <div className="flex items-center text-gray-400 text-xs md:text-sm">
+          <Clock className="h-3 w-3 md:h-4 md:w-4 mr-1" />
           {daysLeft} day{daysLeft !== 1 ? 's' : ''} left
         </div>
       </div>
 
       {/* User Avatar */}
-      <div className="flex items-center mb-4">
+      <div className="flex items-center mb-3 md:mb-4">
         <img
           src={bet.creator.profile_pic_url || `https://i.pravatar.cc/40?img=${bet.creator.id}`}
           alt={bet.creator.username}
-          className="w-12 h-12 rounded-full object-cover"
+          className="w-8 h-8 md:w-12 md:h-12 rounded-full object-cover flex-shrink-0"
         />
-        <div className="ml-3">
-          <p className="font-medium text-gray-900">{bet.creator.username}</p>
+        <div className="ml-2 md:ml-3 flex-1 min-w-0">
+          <p className="font-medium text-gray-900 text-sm md:text-base truncate">{bet.creator.username}</p>
           {bet.community && (
-            <p className="text-sm text-gray-500">{bet.community.name}</p>
+            <p className="text-xs md:text-sm text-gray-500 truncate">{bet.community.name}</p>
           )}
         </div>
       </div>
 
       {/* Question */}
-      <h3 className="text-lg font-semibold text-gray-900 mb-6 leading-tight">
+      <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-4 md:mb-6 leading-tight line-clamp-3">
         {bet.description}
       </h3>
 
       {/* Bet Buttons */}
-      <div className="flex space-x-3 mb-6">
+      <div className="flex space-x-2 md:space-x-3 mb-4 md:mb-6">
         <button
           onClick={() => onBetClick('yes')}
           className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-900 font-medium py-3 px-4 rounded-xl transition-colors"

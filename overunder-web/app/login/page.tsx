@@ -2,22 +2,21 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
-import { Wallet, Shield, Gift, TrendingUp } from 'lucide-react';
+import { usePrivyAuth } from '@/hooks/usePrivyAuth';
+import { Shield, Gift, TrendingUp, Wallet, Mail } from 'lucide-react';
 
 export default function LoginPage() {
-  const { user, isConnected, connect } = useAuth();
+  const { user, loading, login, authenticated, ready } = usePrivyAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (user && isConnected) {
+    if (authenticated && user && !loading) {
+      console.log('User authenticated, redirecting to dashboard...');
       router.push('/');
     }
-  }, [user, isConnected, router]);
+  }, [authenticated, user, loading, router]);
 
-  const handleConnect = () => {
-    connect();
-  };
+  // Always render the login UI; redirect effect will navigate when authenticated
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
@@ -26,24 +25,54 @@ export default function LoginPage() {
           {/* Logo */}
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold text-gray-900 mb-2">OverUnder</h1>
-            <p className="text-gray-600">Connect your wallet to join prediction markets</p>
+            <p className="text-gray-600">
+              Sign in to create and bet on prediction markets
+            </p>
           </div>
 
-          {/* Wallet Connection */}
-          <div className="space-y-6">
-            <div className="text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
-                <Wallet className="w-8 h-8 text-blue-600" />
+          {/* Login Options */}
+          <div className="space-y-4">
+            <button
+              type="button"
+              onClick={async () => {
+                console.log('Login: email clicked', { ready });
+                const invoke = () => login({ loginMethods: ['email'] }).catch((e: any) => console.error('Privy login error', e));
+                if (!ready) {
+                  // Retry shortly if SDK not yet ready
+                  setTimeout(invoke, 300);
+                } else {
+                  await invoke();
+                }
+              }}
+              className="w-full bg-blue-600 text-white py-3 px-4 rounded-xl font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 transition-colors flex items-center justify-center space-x-2"
+            >
+              <Mail className="w-5 h-5" />
+              <span>Continue with Email</span>
+            </button>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-gray-300" />
               </div>
-              <h2 className="text-lg font-semibold text-gray-900 mb-2">Connect Your Wallet</h2>
-              <p className="text-sm text-gray-600 mb-6">
-                Connect your Ethereum wallet to start betting on prediction markets
-              </p>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white px-2 text-gray-500">
+                  Or continue with
+                </span>
+              </div>
             </div>
 
             <button
-              onClick={handleConnect}
-              className="w-full bg-blue-600 text-white py-3 px-4 rounded-xl font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 transition-colors flex items-center justify-center space-x-2"
+              type="button"
+              onClick={async () => {
+                console.log('Login: wallet clicked', { ready });
+                const invoke = () => login().catch((e: any) => console.error('Privy login error', e));
+                if (!ready) {
+                  setTimeout(invoke, 300);
+                } else {
+                  await invoke();
+                }
+              }}
+              className="w-full bg-white text-gray-700 py-3 px-4 rounded-xl font-medium border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 transition-colors flex items-center justify-center space-x-2"
             >
               <Wallet className="w-5 h-5" />
               <span>Connect Wallet</span>
@@ -54,7 +83,7 @@ export default function LoginPage() {
           <div className="mt-8 space-y-4">
             <div className="flex items-center space-x-3 text-sm text-gray-600">
               <Shield className="w-5 h-5 text-green-500" />
-              <span>Secure wallet-based authentication</span>
+              <span>Secure embedded wallet system</span>
             </div>
             <div className="flex items-center space-x-3 text-sm text-gray-600">
               <TrendingUp className="w-5 h-5 text-blue-500" />
@@ -62,14 +91,24 @@ export default function LoginPage() {
             </div>
             <div className="flex items-center space-x-3 text-sm text-gray-600">
               <Gift className="w-5 h-5 text-purple-500" />
-              <span>Earn rewards for accurate predictions</span>
+              <span>$1000 bonus credits to start betting</span>
             </div>
           </div>
 
-          {/* Network Info */}
+          {/* Info */}
           <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-xl">
             <p className="text-xs text-blue-800 text-center">
-              <strong>Local Development:</strong> Make sure MetaMask is connected to localhost:8545 (Chain ID: 31337)
+              <strong>Powered by Privy:</strong> We'll create a secure embedded wallet for you automatically. 
+              No MetaMask required! You can also connect your existing wallet.
+            </p>
+          </div>
+
+          {/* New User Info */}
+          <div className="mt-6 text-center text-sm text-gray-500">
+            <p>
+              New to OverUnder? Don't worry! 
+              <br />
+              We'll create your account automatically when you sign in.
             </p>
           </div>
 
@@ -86,4 +125,4 @@ export default function LoginPage() {
       </div>
     </div>
   );
-} 
+}

@@ -2,58 +2,33 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useAccount } from 'wagmi';
-import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
+import { usePrivyAuth } from '@/hooks/usePrivyAuth';
 import { 
   useGetAllBets, 
   useGetBet, 
   BetData, 
   formatTimeRemaining, 
   getBetStatus 
-} from '@/lib/contracts';
-import { BetModal } from '@/components/bets/bet-modal';
+} from '@/lib/contracts/custodialHooks';
+import { BetModalV2 } from '@/components/bets/BetModalV2';
 import { Navbar } from '@/components/navigation/navbar';
+
 import { Plus, TrendingUp, Users, Clock, Trophy } from 'lucide-react';
 
-// Type declaration for MetaMask
-declare global {
-  interface Window {
-    ethereum?: {
-      request: (params: { method: string; params?: any[] }) => Promise<any>;
-    };
-  }
-}
-
 export default function HomePage() {
-  const { user, loading: authLoading } = useAuth();
-  const { address, isConnected, chain } = useAccount();
+  const { user, loading: authLoading, isConnected, address } = usePrivyAuth();
   const [selectedTab, setSelectedTab] = useState('live-bets');
   const [selectedBet, setSelectedBet] = useState<BetData | null>(null);
   const [betSide, setBetSide] = useState<'yes' | 'no'>('yes');
+  const router = useRouter();
 
-  // Debug logging
-  console.log('🔍 Homepage Debug:', {
-    user,
-    address,
-    isConnected,
-    chain,
-    chainId: chain?.id,
-    expectedChainId: 31337
-  });
+  // Do not redirect; render homepage even if not authenticated
 
   // Fetch all bet IDs from contract
   const { data: betIds, loading: betsLoading, error: betsError } = useGetAllBets();
 
-  // Enhanced debugging for bet loading
-  console.log('📊 Bet Loading Debug:', {
-    betIds,
-    betsLoading,
-    betsError,
-    betIdsLength: betIds?.length
-  });
-
   const openBetModal = (bet: BetData, side: 'yes' | 'no') => {
-    console.log('🎯 Opening bet modal:', { bet, side });
     setSelectedBet(bet);
     setBetSide(side);
   };
@@ -62,17 +37,9 @@ export default function HomePage() {
     setSelectedBet(null);
   };
 
-  // Show loading state
-  if (authLoading || betsLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <div className="flex items-center justify-center h-96">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        </div>
-      </div>
-    );
-  }
+  // Render even when not authenticated; components below handle empty user state
+
+  // Don't block on bets loading - show UI with mock data immediately
 
   // Show error state
   if (betsError) {
@@ -127,66 +94,61 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar />
+        <Navbar />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Prediction Markets</h1>
-          <p className="text-gray-600">Bet on future events with your community</p>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+        {/* Header - Responsive */}
+        <div className="mb-6 md:mb-8">
+          <h1 className="text-2xl md:text-4xl font-bold text-gray-900 mb-2">Prediction Markets</h1>
+          <p className="text-sm md:text-base text-gray-600">Bet on future events with your community</p>
           
-          {/* Debug info in development */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className="mt-4 p-3 bg-blue-50 rounded-lg text-sm">
-              <strong>Debug Info:</strong> Found {betIds?.length || 0} bet IDs: {betIds?.join(', ') || 'None'}
-            </div>
-          )}
+
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-xl p-6 border border-gray-200">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
+          <div className="bg-white rounded-xl p-4 md:p-6 border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-semibold text-gray-900">Total Bets</h3>
-                <p className="text-2xl font-bold text-blue-600">{betIds?.length || 0}</p>
+                <h3 className="font-semibold text-gray-900 text-sm md:text-base">Total Bets</h3>
+                <p className="text-xl md:text-2xl font-bold text-blue-600">{betIds?.length || 0}</p>
               </div>
-              <TrendingUp className="h-8 w-8 text-blue-600" />
+              <TrendingUp className="h-6 w-6 md:h-8 md:w-8 text-blue-600 flex-shrink-0" />
             </div>
           </div>
 
-          <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <div className="bg-white rounded-xl p-4 md:p-6 border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-semibold text-gray-900">Active Markets</h3>
-                <p className="text-2xl font-bold text-green-600">
+                <h3 className="font-semibold text-gray-900 text-sm md:text-base">Active Markets</h3>
+                <p className="text-xl md:text-2xl font-bold text-green-600">
                   {betIds?.length || 0}
                 </p>
               </div>
-              <Clock className="h-8 w-8 text-green-600" />
+              <Clock className="h-6 w-6 md:h-8 md:w-8 text-green-600 flex-shrink-0" />
             </div>
           </div>
 
-          <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <div className="bg-white rounded-xl p-4 md:p-6 border border-gray-200 shadow-sm hover:shadow-md transition-shadow sm:col-span-2 lg:col-span-1">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-semibold text-gray-900">Your Wallet</h3>
-                <p className="text-sm text-gray-600">
-                  {isConnected ? `${address?.slice(0, 6)}...${address?.slice(-4)}` : 'Not connected'}
+                <h3 className="font-semibold text-gray-900 text-sm md:text-base">Your Account</h3>
+                <p className="text-xs md:text-sm text-gray-600">
+                  {user ? user.username : 'Not signed in'}
                 </p>
               </div>
-              <Users className="h-8 w-8 text-purple-600" />
+              <Users className="h-6 w-6 md:h-8 md:w-8 text-purple-600 flex-shrink-0" />
             </div>
           </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="bg-white rounded-xl border border-gray-200 mb-6">
+        {/* Tab Navigation - Responsive */}
+        <div className="bg-white rounded-xl border border-gray-200 mb-6 shadow-sm">
           <div className="border-b border-gray-200">
-            <nav className="flex space-x-8 px-6">
+            <nav className="flex space-x-4 md:space-x-8 px-4 md:px-6 overflow-x-auto">
               <button
                 onClick={() => setSelectedTab('live-bets')}
-                className={`py-4 border-b-2 font-medium text-sm ${
+                className={`py-3 md:py-4 border-b-2 font-medium text-sm whitespace-nowrap ${
                   selectedTab === 'live-bets'
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -196,7 +158,7 @@ export default function HomePage() {
               </button>
               <button
                 onClick={() => setSelectedTab('trending')}
-                className={`py-4 border-b-2 font-medium text-sm ${
+                className={`py-3 md:py-4 border-b-2 font-medium text-sm whitespace-nowrap ${
                   selectedTab === 'trending'
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -206,7 +168,7 @@ export default function HomePage() {
               </button>
               <button
                 onClick={() => setSelectedTab('resolved')}
-                className={`py-4 border-b-2 font-medium text-sm ${
+                className={`py-3 md:py-4 border-b-2 font-medium text-sm whitespace-nowrap ${
                   selectedTab === 'resolved'
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -218,21 +180,22 @@ export default function HomePage() {
           </div>
 
           {/* Tab Content */}
-          <div className="p-6">
+          <div className="p-4 md:p-6">
             {betIds && betIds.length > 0 ? (
               <BetList betIds={betIds} selectedTab={selectedTab} onBetClick={openBetModal} />
             ) : (
-              <EmptyState selectedTab={selectedTab} isConnected={isConnected} />
+              <EmptyState selectedTab={selectedTab} user={user} />
             )}
           </div>
         </div>
 
-        {/* Create Bet Button */}
+        {/* Create Bet Button - Mobile FAB */}
         {isConnected && (
-          <div className="fixed bottom-6 right-6">
+          <div className="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-30">
             <Link href="/bets/new">
-              <button className="bg-blue-600 hover:bg-blue-700 text-white rounded-full p-4 shadow-lg transition-all duration-200 hover:scale-105">
-                <Plus className="h-6 w-6" />
+              <button className="bg-blue-600 hover:bg-blue-700 text-white rounded-full p-3 md:p-4 shadow-lg transition-all duration-200 hover:scale-105 active:scale-95">
+                <Plus className="h-5 w-5 md:h-6 md:w-6" />
+                <span className="sr-only">Create new bet</span>
               </button>
             </Link>
           </div>
@@ -240,13 +203,11 @@ export default function HomePage() {
       </div>
 
       {/* Bet Modal */}
-      {selectedBet && (
-        <BetModal
-          bet={selectedBet}
-          side={betSide}
-          onClose={closeBetModal}
-        />
-      )}
+      <BetModalV2
+        bet={selectedBet!}
+        isOpen={!!selectedBet}
+        onClose={closeBetModal}
+      />
     </div>
   );
 }
@@ -262,14 +223,14 @@ function BetList({
   onBetClick: (bet: BetData, side: 'yes' | 'no') => void
 }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 md:space-y-6">
       {betIds.slice(0, 10).map((betId) => (
-        <BetItem key={betId} betId={betId} onBetClick={onBetClick} />
+        <BetItem key={betId} betId={betId} selectedTab={selectedTab} onBetClick={onBetClick} />
       ))}
 
       {betIds.length > 10 && (
         <div className="text-center py-4">
-          <p className="text-gray-500">Showing first 10 bets. Load more coming soon...</p>
+          <p className="text-gray-500 text-sm md:text-base">Showing first 10 bets. Load more coming soon...</p>
         </div>
       )}
     </div>
@@ -279,9 +240,11 @@ function BetList({
 // Individual bet item component
 function BetItem({
   betId,
+  selectedTab,
   onBetClick
 }: {
   betId: number,
+  selectedTab: string,
   onBetClick: (bet: BetData, side: 'yes' | 'no') => void
 }) {
   const { data: bet, loading, error } = useGetBet(betId);
@@ -298,7 +261,7 @@ function BetItem({
       question: bet.question,
       isResolved: bet.isResolved,
       timeRemaining: bet.timeRemaining,
-      bettingOptions: bet.bettingOptions
+      bettingOptions: bet.options
     } : null
   });
 
@@ -312,102 +275,78 @@ function BetItem({
   }
 
   if (error || !bet) {
-    console.error(`❌ Failed to load bet ${betId}:`, error);
-    return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <p className="text-red-600 text-sm">
-          Failed to load bet #{betId}: {error || 'Unknown error'}
-        </p>
-        {process.env.NODE_ENV === 'development' && (
-          <p className="text-xs text-red-500 mt-1">
-            Check contract deployment and ABI compatibility
-          </p>
-        )}
-      </div>
-    );
+    console.log(`ℹ️ Loading mock data for bet ${betId}`);
+    // Don't render error UI in development - mock data will load
+    return null;
   }
 
-  const status = getBetStatus(bet);
-  const timeRemaining = formatTimeRemaining(bet.timeRemaining || 0);
+  const status = getBetStatus(bet.deadline);
+  const timeRemaining = formatTimeRemaining(bet.deadline);
+
+  // Filter bets based on selected tab and status
+  const shouldHide = 
+    (selectedTab === 'live-bets' && (status === 'expired' || bet.isResolved)) ||
+    (selectedTab === 'trending' && (status === 'expired' || bet.isResolved)) ||
+    (selectedTab === 'resolved' && !bet.isResolved);
+
+  if (shouldHide) {
+    return null;
+  }
+
+  // We need to find the database UUID for this onchain bet ID
+  // For now, let's log what we're trying to link to
+  console.log('🔗 Bet Link Debug:', {
+    onchainBetId: bet.id,
+    betData: bet,
+    linkHref: `/bets/${bet.id}`
+  });
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
-      <div className="flex justify-between items-start mb-4">
-        <div className="flex-1">
-          <h3 className="font-semibold text-gray-900 mb-2">{bet.question}</h3>
-          {bet.description && (
-            <p className="text-gray-600 text-sm mb-3">{bet.description}</p>
-          )}
+    <Link href={`/bets/${bet.id}`}>
+      <div className="bg-white border border-gray-200 rounded-lg p-4 md:p-6 hover:shadow-md transition-shadow w-full cursor-pointer">
+        <div className="space-y-4">
+          <div>
+            <h3 className="font-semibold text-gray-900 mb-2 text-base md:text-lg leading-tight">{bet.question}</h3>
+            {bet.description && (
+              <p className="text-gray-600 text-sm mb-3">{bet.description}</p>
+            )}
+          </div>
 
-          <div className="flex items-center space-x-4 text-sm text-gray-500">
+          <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
             <span className="flex items-center">
               <Clock className="h-4 w-4 mr-1" />
-              {status === 'active' ? timeRemaining : status === 'resolved' ? 'Resolved' : 'Expired'}
+              {status === 'active' ? timeRemaining : status === 'resolved' ? 'RESOLVED' : 'Expired'}
             </span>
             <span className="flex items-center">
               <TrendingUp className="h-4 w-4 mr-1" />
-              {bet.totalPoolAmount} ETH Pool
+              ${bet.totalPool} Pool
             </span>
-            {bet.odds && (
-              <span className="flex items-center">
-                <Trophy className="h-4 w-4 mr-1" />
-                {bet.odds.map((odd, index) =>
-                  `${bet.bettingOptions[index]}: ${odd.toFixed(1)}%`
-                ).join(' | ')}
+            {status === 'resolved' && bet.resolved_outcome && (
+              <span className="flex items-center bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-medium">
+                Winner: {bet.resolved_outcome.toUpperCase()}
               </span>
             )}
           </div>
 
-          {/* Debug info for development */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className="mt-2 text-xs text-gray-500">
-              ID: {bet.id} | Resolved: {bet.isResolved ? 'Yes' : 'No'} | Time: {bet.timeRemaining}s
-            </div>
-          )}
-        </div>
-
-        <div className="flex space-x-2 ml-4">
-          {bet.bettingOptions.map((option, index) => (
-            <button
-              key={index}
-              onClick={() => {
-                console.log(`🎯 Clicking ${option} for bet ${bet.id}`);
-                onBetClick(bet, index === 0 ? 'yes' : 'no');
-              }}
-              className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
-                index === 0
-                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                  : 'bg-red-100 text-red-700 hover:bg-red-200'
-              } ${status !== 'active' ? 'opacity-50 cursor-not-allowed' : ''}`}
-              disabled={status !== 'active'}
-            >
-              {option}
-              {bet.odds && (
-                <span className="block text-xs opacity-75">
-                  {bet.odds[index].toFixed(1)}%
-                </span>
-              )}
-            </button>
-          ))}
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            {bet.options.map((option, index) => (
+              <span key={index} className={`px-3 py-1 rounded-full text-xs font-medium ${
+                index === 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+              }`}>
+                {option}
+                {bet.odds && ` (${bet.odds[index].toFixed(1)}%)`}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
 
 // Empty state component
-function EmptyState({ selectedTab, isConnected }: { selectedTab: string, isConnected: boolean }) {
-  if (!isConnected) {
-    return (
-      <div className="text-center py-12">
-        <div className="mx-auto h-12 w-12 text-gray-400 mb-4">
-          <Users className="h-12 w-12" />
-        </div>
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Connect Your Wallet</h3>
-        <p className="text-gray-500 mb-6">Connect your wallet to view and participate in prediction markets.</p>
-      </div>
-    );
-  }
+function EmptyState({ selectedTab, user }: { selectedTab: string, user: any }) {
+  // User should always be authenticated at this point due to middleware protection
 
   return (
     <div className="text-center py-12">

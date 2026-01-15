@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { usePrivyAuth } from '@/hooks/usePrivyAuth';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,7 +23,7 @@ interface Community {
 }
 
 export default function CommunitiesPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = usePrivyAuth();
   const [communities, setCommunities] = useState<Community[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -44,38 +44,57 @@ export default function CommunitiesPage() {
   }, [user]);
 
   const fetchCommunities = async () => {
-    if (!supabase || !user) return;
+    if (!supabase || !user) {
+      console.log('🔍 Communities fetch skipped:', { supabase: !!supabase, user: !!user });
+      setLoading(false);
+      return;
+    }
 
     try {
-      // Get all communities with member counts
+      console.log('🔍 Fetching communities for user:', user.id);
+
+      // First, try to get basic communities data
       const { data: communitiesData, error: communitiesError } = await supabase
         .from('communities')
-        .select(`
-          *,
-          community_members(count)
-        `);
+        .select('*');
 
-      if (communitiesError) throw communitiesError;
+      if (communitiesError) {
+        console.error('Communities table error:', communitiesError);
+        // If communities table doesn't exist, show empty state
+        setCommunities([]);
+        return;
+      }
 
-      // Get user's memberships
-      const { data: membershipsData, error: membershipsError } = await supabase
-        .from('community_members')
-        .select('community_id')
-        .eq('user_id', user.id);
+      console.log('📋 Communities data:', communitiesData);
 
-      if (membershipsError) throw membershipsError;
+      // Try to get memberships (this might fail if table doesn't exist)
+      let userCommunityIds = new Set<string>();
+      try {
+        const { data: membershipsData, error: membershipsError } = await supabase
+          .from('community_members')
+          .select('community_id')
+          .eq('user_id', user.id);
 
-      const userCommunityIds = new Set(membershipsData?.map(m => m.community_id) || []);
+        if (!membershipsError && membershipsData) {
+          userCommunityIds = new Set(membershipsData.map(m => m.community_id));
+        }
+      } catch (membershipError) {
+        console.warn('Community members table not available:', membershipError);
+      }
 
       const communitiesWithMembership = communitiesData?.map(community => ({
         ...community,
-        member_count: community.community_members?.[0]?.count || 0,
+        member_count: 0, // Default to 0 for now
         is_member: userCommunityIds.has(community.id)
       })) || [];
 
       setCommunities(communitiesWithMembership);
-    } catch (error) {
-      console.error('Error fetching communities:', error);
+    } catch (error: unknown) {
+      console.error('Error fetching communities:', {
+        error,
+        message: (error as Error)?.message,
+        details: error
+      });
       setCommunities([]);
     } finally {
       setLoading(false);
@@ -119,7 +138,10 @@ export default function CommunitiesPage() {
   };
 
   const handleCreateCommunity = async () => {
-    if (!supabase || !user) return;
+    if (!supabase || !user) {
+      toast('Authentication required', 'error');
+      return;
+    }
 
     if (!newCommunity.name.trim()) {
       toast('Please enter a community name', 'error');
@@ -128,6 +150,11 @@ export default function CommunitiesPage() {
 
     setCreating(true);
     try {
+      console.log('🏗️ Creating community:', { 
+        name: newCommunity.name.trim(),
+        creator_id: user.id 
+      });
+
       const { data, error } = await supabase
         .from('communities')
         .insert({
@@ -139,24 +166,38 @@ export default function CommunitiesPage() {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Community creation error:', error);
+        throw error;
+      }
 
-      // Auto-join the creator as admin
-      await supabase
-        .from('community_members')
-        .insert({
-          community_id: data.id,
-          user_id: user.id,
-          role: 'admin'
-        });
+      console.log('✅ Community created:', data);
+
+      // Try to auto-join the creator as admin (might fail if table doesn't exist)
+      try {
+        await supabase
+          .from('community_members')
+          .insert({
+            community_id: data.id,
+            user_id: user.id,
+            role: 'admin'
+          });
+        console.log('✅ Creator added as admin');
+      } catch (memberError) {
+        console.warn('Could not add creator as admin (community_members table may not exist):', memberError);
+      }
 
       toast('Community created successfully!', 'success');
       setIsCreateDialogOpen(false);
       setNewCommunity({ name: '', description: '', image_url: '' });
       fetchCommunities();
-    } catch (error) {
-      console.error('Error creating community:', error);
-      toast('Failed to create community', 'error');
+    } catch (error: unknown) {
+      console.error('Error creating community:', {
+        error,
+        message: (error as Error)?.message,
+        details: error
+      });
+      toast(`Failed to create community: ${(error as Error)?.message || 'Unknown error'}`, 'error');
     } finally {
       setCreating(false);
     }
@@ -179,20 +220,21 @@ export default function CommunitiesPage() {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-4xl lg:max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 md:mb-8">
           <div className="mb-4 md:mb-0">
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">Communities</h1>
-            <p className="text-gray-600">Join prediction markets with like-minded people</p>
+            <h1 className="text-2xl md:text-4xl font-bold text-gray-900 mb-2">Communities</h1>
+            <p className="text-sm md:text-base text-gray-600">Join prediction markets with like-minded people</p>
             </div>
 
           {user && (
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="bg-gray-900 hover:bg-gray-800 text-white">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Community
+                <Button className="bg-gray-900 hover:bg-gray-800 text-white text-sm md:text-base">
+                  <Plus className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
+                  <span className="hidden sm:inline">Create Community</span>
+                  <span className="sm:hidden">Create</span>
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-md">
